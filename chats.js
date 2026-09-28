@@ -5,7 +5,10 @@ import {
     getDocs,
     doc,
     updateDoc,
-    arrayUnion
+    arrayUnion,
+    query,
+    or,
+    where
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 import {
@@ -710,9 +713,13 @@ async function loadChats() {
 
         const snapshot =
             await getDocs(
-                collection(
-                    db,
-                    "chats"
+                query(
+                    collection(db, "chats"),
+                    or(
+                        where("participants", "array-contains", currentUser.uid),
+                        where("buyerId", "==", currentUser.uid),
+                        where("sellerId", "==", currentUser.uid)
+                    )
                 )
             );
 

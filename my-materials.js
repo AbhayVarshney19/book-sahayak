@@ -2,7 +2,9 @@ import { auth, db, storage } from "./firebase.js";
 
 import {
     ref,
-    deleteObject
+    deleteObject,
+    uploadBytes,
+    getDownloadURL
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-storage.js";
 
 import {
@@ -15,7 +17,8 @@ import {
     query,
     where,
     deleteDoc,
-    doc
+    doc,
+    updateDoc
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 
@@ -103,6 +106,248 @@ if (myMaterialsThemeBtn) {
         }
     );
 
+}
+
+
+function createResubmitForm(material, materialId, user, editButton) {
+    const form = document.createElement("form");
+    form.className = "material-resubmit-form";
+    form.hidden = true;
+
+    const heading = document.createElement("div");
+    heading.className = "resubmit-form-heading";
+    const headingCopy = document.createElement("div");
+    const title = document.createElement("h4");
+    title.textContent = "Update your listing";
+    const intro = document.createElement("p");
+    intro.textContent = "Make the suggested changes, then send it back for review.";
+    headingCopy.append(title, intro);
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "resubmit-close-btn";
+    closeButton.setAttribute("aria-label", "Close edit form");
+    closeButton.textContent = "×";
+    heading.append(headingCopy, closeButton);
+    form.append(heading);
+
+    const addField = (labelText, control, className = "") => {
+        const label = document.createElement("label");
+        label.className = `resubmit-field ${className}`.trim();
+        const caption = document.createElement("span");
+        caption.textContent = labelText;
+        label.append(caption, control);
+        form.append(label);
+        return control;
+    };
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.required = true;
+    titleInput.maxLength = 120;
+    titleInput.value = material.title || "";
+    addField("Listing title", titleInput);
+
+    const row = document.createElement("div");
+    row.className = "resubmit-field-row";
+    form.append(row);
+    const addRowField = (labelText, control) => {
+        const label = document.createElement("label");
+        label.className = "resubmit-field";
+        const caption = document.createElement("span");
+        caption.textContent = labelText;
+        label.append(caption, control);
+        row.append(label);
+    };
+
+    const categorySelect = document.createElement("select");
+    ["Books", "Notes", "PYQs", "Lab Files", "Other"].forEach((category) => {
+        categorySelect.add(new Option(category, category));
+    });
+    if (material.category && ![...categorySelect.options].some((option) => option.value === material.category)) {
+        categorySelect.add(new Option(material.category, material.category));
+    }
+    categorySelect.value = material.category || "Other";
+    addRowField("Category", categorySelect);
+
+    const subjectInput = document.createElement("input");
+    subjectInput.type = "text";
+    subjectInput.required = true;
+    subjectInput.maxLength = 80;
+    subjectInput.value = material.subject || "";
+    addRowField("Subject", subjectInput);
+
+    const contactInput = document.createElement("input");
+    contactInput.type = "tel";
+    contactInput.inputMode = "numeric";
+    contactInput.maxLength = 10;
+    contactInput.pattern = "[0-9]{10}";
+    contactInput.required = true;
+    contactInput.value = material.contactNumber || "";
+    addField("Contact number (10 digits)", contactInput);
+
+    const descriptionInput = document.createElement("textarea");
+    descriptionInput.rows = 4;
+    descriptionInput.maxLength = 1200;
+    descriptionInput.required = true;
+    descriptionInput.value = material.description || "";
+    addField("Description", descriptionInput);
+
+    const priceRow = document.createElement("div");
+    priceRow.className = "resubmit-field-row resubmit-price-row";
+    form.append(priceRow);
+
+    const priceInput = document.createElement("input");
+    priceInput.type = "number";
+    priceInput.min = "0";
+    priceInput.step = "1";
+    priceInput.value = material.isFree ? "" : (material.price ?? "");
+    const priceLabel = document.createElement("label");
+    priceLabel.className = "resubmit-field";
+    const priceCaption = document.createElement("span");
+    priceCaption.textContent = "Price (₹)";
+    priceLabel.append(priceCaption, priceInput);
+    priceRow.append(priceLabel);
+
+    const conditionSelect = document.createElement("select");
+    ["New", "Like New", "Good", "Fair", "Digital"].forEach((condition) => {
+        conditionSelect.add(new Option(condition, condition));
+    });
+    if (material.condition && ![...conditionSelect.options].some((option) => option.value === material.condition)) {
+        conditionSelect.add(new Option(material.condition, material.condition));
+    }
+    conditionSelect.value = material.condition || "Digital";
+    const conditionLabel = document.createElement("label");
+    conditionLabel.className = "resubmit-field";
+    const conditionCaption = document.createElement("span");
+    conditionCaption.textContent = "Condition";
+    conditionLabel.append(conditionCaption, conditionSelect);
+    priceRow.append(conditionLabel);
+
+    const freeLabel = document.createElement("label");
+    freeLabel.className = "resubmit-free-option";
+    const freeInput = document.createElement("input");
+    freeInput.type = "checkbox";
+    freeInput.checked = Boolean(material.isFree);
+    const freeText = document.createElement("span");
+    freeText.textContent = "This resource is free";
+    freeLabel.append(freeInput, freeText);
+    form.append(freeLabel);
+
+    freeInput.addEventListener("change", () => {
+        priceInput.disabled = freeInput.checked;
+        priceInput.required = !freeInput.checked;
+        if (freeInput.checked) priceInput.value = "";
+    });
+    priceInput.disabled = freeInput.checked;
+    priceInput.required = !freeInput.checked;
+
+    const fileBlock = document.createElement("div");
+    fileBlock.className = "resubmit-file-block";
+    const fileInfo = document.createElement("p");
+    fileInfo.textContent = material.fileName
+        ? `Current file: ${material.fileName}. Leave this blank to keep it.`
+        : "Add or replace the resource file (optional).";
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".pdf,.doc,.docx,.ppt,.pptx";
+    fileBlock.append(fileInfo, fileInput);
+    form.append(fileBlock);
+
+    const status = document.createElement("p");
+    status.className = "resubmit-status";
+    status.setAttribute("aria-live", "polite");
+    form.append(status);
+
+    const actions = document.createElement("div");
+    actions.className = "resubmit-form-actions";
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "resubmit-cancel-btn";
+    cancelButton.textContent = "Cancel";
+    const submitButton = document.createElement("button");
+    submitButton.type = "submit";
+    submitButton.className = "resubmit-submit-btn";
+    submitButton.textContent = "Resubmit for review";
+    actions.append(cancelButton, submitButton);
+    form.append(actions);
+
+    const closeForm = () => {
+        form.hidden = true;
+        editButton.hidden = false;
+    };
+    closeButton.addEventListener("click", closeForm);
+    cancelButton.addEventListener("click", closeForm);
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+
+        submitButton.disabled = true;
+        cancelButton.disabled = true;
+        closeButton.disabled = true;
+        status.textContent = "Saving your changes…";
+
+        let replacementRef = null;
+        try {
+            const data = {
+                title: titleInput.value.trim(),
+                category: categorySelect.value,
+                subject: subjectInput.value.trim(),
+                contactNumber: contactInput.value.trim(),
+                description: descriptionInput.value.trim(),
+                condition: conditionSelect.value,
+                price: freeInput.checked ? 0 : Number(priceInput.value),
+                isFree: freeInput.checked,
+                status: "pending",
+                reviewedAt: null,
+                reviewedBy: "",
+                reviewFeedback: ""
+            };
+
+            const file = fileInput.files?.[0];
+            if (file) {
+                const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                replacementRef = ref(
+                    storage,
+                    `materials/${user.uid}/${Date.now()}_${safeFileName}`
+                );
+                await uploadBytes(replacementRef, file, {
+                    contentType: file.type || "application/octet-stream"
+                });
+                data.fileURL = await getDownloadURL(replacementRef);
+                data.storagePath = replacementRef.fullPath;
+                data.fileName = file.name;
+            }
+
+            await updateDoc(doc(db, "materials", materialId), data);
+
+            if (replacementRef && material.storagePath) {
+                try {
+                    await deleteObject(ref(storage, material.storagePath));
+                } catch (cleanupError) {
+                    console.warn("Could not remove the replaced resource file:", cleanupError);
+                }
+            }
+
+            alert("Your updated listing has been resubmitted for review.");
+            window.location.reload();
+        } catch (error) {
+            if (replacementRef) {
+                try {
+                    await deleteObject(replacementRef);
+                } catch (cleanupError) {
+                    console.warn("Could not remove the incomplete replacement upload:", cleanupError);
+                }
+            }
+            console.error("Resubmission error:", error);
+            status.textContent = `Could not resubmit: ${error.message}`;
+            submitButton.disabled = false;
+            cancelButton.disabled = false;
+            closeButton.disabled = false;
+        }
+    });
+
+    return form;
 }
 
 
@@ -308,9 +553,14 @@ onAuthStateChanged(
                                 `
                                 : reviewStatus === "rejected"
                                     ? `
-                                        <p class="my-material-review-note rejected-note">
-                                            This listing was rejected and is not visible to other students.
-                                        </p>
+                                        <div class="my-material-review-note rejected-note">
+                                            <strong>Changes requested</strong>
+                                            <p>${escapeHTML(
+                                                material.reviewFeedback ||
+                                                "Please review and improve the listing details before submitting it again."
+                                            )}</p>
+                                            <span>This listing stays hidden until it is approved.</span>
+                                        </div>
                                     `
                                     : ""
                         }
@@ -332,6 +582,16 @@ onAuthStateChanged(
                             >
                                 💬 Messages
                             </button>
+
+                            ${
+                                reviewStatus === "rejected"
+                                    ? `
+                                        <button type="button" class="editResubmitBtn">
+                                            ✎ Edit & resubmit
+                                        </button>
+                                    `
+                                    : ""
+                            }
 
 
                             <button
@@ -658,6 +918,25 @@ onAuthStateChanged(
 
                         }
                     );
+
+
+                    if (reviewStatus === "rejected") {
+                        const editButton = materialDiv.querySelector(".editResubmitBtn");
+                        const resubmitForm = createResubmitForm(
+                            material,
+                            materialId,
+                            user,
+                            editButton
+                        );
+
+                        editButton.addEventListener("click", () => {
+                            editButton.hidden = true;
+                            resubmitForm.hidden = false;
+                            resubmitForm.querySelector("input")?.focus();
+                        });
+
+                        materialDiv.appendChild(resubmitForm);
+                    }
 
 
                     /* =========================

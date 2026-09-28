@@ -287,6 +287,48 @@ async function setupChat() {
     const sellerId =
         materialData.uploadedBy;
 
+    if (!sellerId || (currentUser.uid !== sellerId && otherUserId !== sellerId)) {
+        if (materialTitleElement) {
+            materialTitleElement.textContent =
+                "This conversation link does not match the listing.";
+        }
+        return null;
+    }
+
+    const existingData = existingChat.exists()
+        ? existingChat.data()
+        : null;
+
+    if (existingData) {
+        const expectedBuyerId =
+            currentUser.uid === sellerId ? otherUserId : currentUser.uid;
+        const participants = Array.isArray(existingData.participants)
+            ? existingData.participants
+            : [];
+        const matchesConversation =
+            (!existingData.sellerId || existingData.sellerId === sellerId) &&
+            (!existingData.buyerId || existingData.buyerId === expectedBuyerId) &&
+            (participants.length
+                ? participants.includes(sellerId) && participants.includes(expectedBuyerId)
+                : existingData.sellerId === sellerId && existingData.buyerId === expectedBuyerId);
+
+        if (!matchesConversation) {
+            if (materialTitleElement) {
+                materialTitleElement.textContent =
+                    "This conversation does not match the listing.";
+            }
+            return null;
+        }
+    } else if (currentUser.uid === sellerId) {
+        // Sellers can reopen conversations from the chat list, but a seller
+        // should not create a conversation for an arbitrary buyer ID.
+        if (materialTitleElement) {
+            materialTitleElement.textContent =
+                "This conversation could not be found.";
+        }
+        return null;
+    }
+
     const sellerName =
         materialData.uploaderName ||
         "Seller";
@@ -308,7 +350,7 @@ async function setupChat() {
         if (existingChat.exists()) {
 
             buyerName =
-                existingChat.data().buyerName ||
+                existingData.buyerName ||
                 "Buyer";
 
         } else {
@@ -370,13 +412,19 @@ async function setupChat() {
     };
 
 
-    await setDoc(
-        chatRef,
-        chatData,
-        {
-            merge: true
+    if (existingData) {
+        const chatUpdate = { updatedAt: serverTimestamp() };
+        if (!Array.isArray(existingData.participants) || existingData.participants.length !== 2) {
+            chatUpdate.participants = chatData.participants;
         }
-    );
+        if (!existingData.buyerId) chatUpdate.buyerId = buyerId;
+        if (!existingData.sellerId) chatUpdate.sellerId = sellerId;
+        if (!existingData.buyerName) chatUpdate.buyerName = buyerName;
+        if (!existingData.sellerName) chatUpdate.sellerName = sellerName;
+        await setDoc(chatRef, chatUpdate, { merge: true });
+    } else {
+        await setDoc(chatRef, chatData, { merge: true });
+    }
 
 
     return {

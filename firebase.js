@@ -4,6 +4,7 @@ import {
   doc,
   collection,
   query,
+  or,
   where,
   getFirestore,
   onSnapshot,
@@ -42,7 +43,7 @@ async function updatePresence(isOnline) {
 
   try {
     await setDoc(
-      doc(db, "users", activeUser.uid),
+      doc(db, "presence", activeUser.uid),
       {
         isOnline,
         lastSeen: serverTimestamp()
@@ -102,7 +103,7 @@ function showChatPresence(userId) {
   };
 
   stopWatchingPresence = onSnapshot(
-    doc(db, "users", userId),
+    doc(db, "presence", userId),
     (snapshot) => {
       latestPresence = snapshot.data();
       renderPresence();
@@ -170,7 +171,11 @@ function watchUnreadMessages(userId) {
   stopWatchingUnreadMessages = onSnapshot(
     query(
       collection(db, "chats"),
-      where("participants", "array-contains", userId)
+      or(
+        where("participants", "array-contains", userId),
+        where("buyerId", "==", userId),
+        where("sellerId", "==", userId)
+      )
     ),
     (snapshot) => {
       let total = 0;
@@ -228,7 +233,7 @@ onAuthStateChanged(auth, (user) => {
 
     if (signedOutUser) {
       setDoc(
-        doc(db, "users", signedOutUser.uid),
+        doc(db, "presence", signedOutUser.uid),
         { isOnline: false, lastSeen: serverTimestamp() },
         { merge: true }
       ).catch(() => {});

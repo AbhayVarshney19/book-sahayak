@@ -1,0 +1,97 @@
+.my-materials-page .rejected-note {
+    display: grid;
+    gap: 5px;
+    margin-top: 14px;
+    border: 1px solid #f3d2d2;
+    border-radius: 12px;
+    background: #fff8f7;
+    color: #a8444a;
+}
+
+.my-materials-page .rejected-note strong { font-size: 12px; }
+.my-materials-page .rejected-note p { margin: 0; color: #6e3d42; font-size: 12px; font-weight: 600; line-height: 1.55; white-space: pre-wrap; }
+.my-materials-page .rejected-note span { color: #a66b6e; font-size: 10px; font-weight: 600; }
+
+.my-materials-page .my-material-actions { flex-wrap: wrap; }
+.my-materials-page .editResubmitBtn,
+.my-materials-page .messageMaterialBtn {
+    min-height: 40px;
+    padding: 10px 13px;
+    border: 1px solid #dbe5f6;
+    border-radius: 9px;
+    background: #f1f5ff;
+    color: #3e61a6;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 750;
+    transition: transform 150ms ease, background 150ms ease;
+}
+.my-materials-page .editResubmitBtn { flex: 1 1 100%; border-color: #cfe5d9; background: #edf8f1; color: #23714f; }
+.my-materials-page .editResubmitBtn:hover,
+.my-materials-page .messageMaterialBtn:hover { transform: translateY(-1px); background: #e5edff; }
+.my-materials-page .editResubmitBtn:hover { background: #e0f2e7; }
+.my-materials-page .editResubmitBtn[hidden] { display: none; }
+
+.material-resubmit-form {
+    display: grid;
+    gap: 13px;
+    margin-top: 17px;
+    padding: 18px;
+    border: 1px solid #dbe5f1;
+    border-radius: 15px;
+    background: #f9fbfe;
+}
+.material-resubmit-form[hidden] { display: none; }
+.resubmit-form-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.resubmit-form-heading h4 { margin: 0; color: #23334b; font-size: 15px; }
+.resubmit-form-heading p { margin: 4px 0 0; color: #77869b; font-size: 11px; line-height: 1.5; }
+.resubmit-close-btn { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border: 1px solid #e0e6ef; border-radius: 9px; background: #fff; color: #6e7c90; cursor: pointer; font-size: 21px; line-height: 1; }
+.resubmit-field { display: grid; min-width: 0; gap: 6px; color: #52637a; font-size: 10px; font-weight: 800; }
+.resubmit-field input,
+.resubmit-field select,
+.resubmit-field textarea { width: 100%; min-width: 0; padding: 10px 11px; border: 1px solid #dce4ee; border-radius: 9px; outline: 0; background: #fff; color: #26364e; font: inherit; font-size: 12px; font-weight: 550; }
+.resubmit-field textarea { resize: vertical; line-height: 1.55; }
+.resubmit-field input:focus,
+.resubmit-field select:focus,
+.resubmit-field textarea:focus { border-color: #85a6e4; box-shadow: 0 0 0 3px rgba(65, 108, 194, .1); }
+.resubmit-field input:disabled { background: #f0f2f6; color: #98a3b3; }
+.resubmit-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.resubmit-free-option { display: inline-flex; width: fit-content; align-items: center; gap: 8px; color: #53647b; cursor: pointer; font-size: 11px; font-weight: 700; }
+.resubmit-free-option input { width: 15px; height: 15px; accent-color: #32745b; }
+.resubmit-file-block { display: grid; gap: 7px; padding: 11px; border: 1px dashed #d6deea; border-radius: 10px; background: #fff; }
+.resubmit-file-block p { margin: 0; color: #7b899d; font-size: 10px; line-height: 1.5; }
+.resubmit-file-block input { width: 100%; color: #52637a; font-size: 10px; }
+.resubmit-status { min-height: 15px; margin: 0; color: #b4484d; font-size: 11px; line-height: 1.45; }
+.resubmit-form-actions { display: flex; justify-content: flex-end; gap: 9px; }
+.resubmit-form-actions button { min-height: 38px; padding: 9px 12px; border-radius: 9px; cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; }
+.resubmit-cancel-btn { border: 1px solid #dfe5ed; background: #fff; color: #586980; }
+.resubmit-submit-btn { border: 1px solid #1f7653; background: #24845f; color: #fff; }
+.resubmit-form-actions button:disabled { cursor: wait; opacity: .58; }
+
+body.dark-mode .my-materials-page .rejected-note { border-color: #573337; background: #2b1f2b; color: #ffb9b7; }
+body.dark-mode .my-materials-page .rejected-note p { color: #f0d1d0; }
+body.dark-mode .my-materials-page .rejected-note span { color: #cca1a1; }
+body.dark-mode .my-materials-page .editResubmitBtn { border-color: #2d5948; background: #1d382f; color: #9ee0ba; }
+body.dark-mode .my-materials-page .messageMaterialBtn { border-color: #344a6a; background: #1a2b46; color: #b9cefa; }
+body.dark-mode .material-resubmit-form { border-color: #34445d; background: #17253a; }
+body.dark-mode .resubmit-form-heading h4 { color: #e4ecf8; }
+body.dark-mode .resubmit-form-heading p,
+body.dark-mode .resubmit-file-block p { color: #9caec5; }
+body.dark-mode .resubmit-close-btn,
+body.dark-mode .resubmit-cancel-btn { border-color: #3a4b65; background: #1d2d45; color: #d1dced; }
+body.dark-mode .resubmit-field { color: #bac8dc; }
+body.dark-mode .resubmit-field input,
+body.dark-mode .resubmit-field select,
+body.dark-mode .resubmit-field textarea { border-color: #3a4b65; background: #0f1d31; color: #edf3fc; }
+body.dark-mode .resubmit-field input:disabled { background: #1b2a40; color: #8392a8; }
+body.dark-mode .resubmit-free-option { color: #bfccde; }
+body.dark-mode .resubmit-file-block { border-color: #3b4b63; background: #142239; }
+body.dark-mode .resubmit-file-block input { color: #cad5e4; }
+
+@media (max-width: 560px) {
+    .material-resubmit-form { padding: 14px; }
+    .resubmit-field-row { grid-template-columns: 1fr; }
+    .my-materials-page .my-material-actions { gap: 8px; }
+    .my-materials-page .editResubmitBtn { flex: 1 1 100%; }
+}

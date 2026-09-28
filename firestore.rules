@@ -11,11 +11,62 @@ service cloud.firestore {
         request.auth.uid == "vPbcTv2GTMcvdrpVBrNiUDtjGuC3";
     }
 
+    function isRejectedListingResubmission() {
+      return resource.data.status == "rejected" &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.get("reviewedBy", "") == "" &&
+        request.resource.data.get("reviewedAt", null) == null &&
+        request.resource.data.get("reviewFeedback", "") == "";
+    }
+
+    function chatParticipant(data) {
+      return signedIn() && (
+        request.auth.uid in data.get("participants", []) ||
+        data.get("buyerId", "") == request.auth.uid ||
+        data.get("sellerId", "") == request.auth.uid
+      );
+    }
+
+    function validChatParticipants(data) {
+      return data.get("buyerId", "") is string &&
+        data.get("sellerId", "") is string &&
+        data.get("buyerId", "") != "" &&
+        data.get("sellerId", "") != "" &&
+        data.get("buyerId", "") != data.get("sellerId", "") &&
+        data.get("participants", []) is list &&
+        data.get("participants", []).size() == 2 &&
+        data.get("participants", []).hasAll([
+          data.get("buyerId", ""),
+          data.get("sellerId", "")
+        ]);
+    }
+
+    function chatPath(chatId) {
+      return /databases/$(database)/documents/chats/$(chatId);
+    }
+
+    function chatMemberForMessage(chatId) {
+      return exists(chatPath(chatId)) &&
+        chatParticipant(get(chatPath(chatId)).data);
+    }
+
     match /users/{userId} {
-      allow read: if signedIn();
+      allow get: if signedIn() &&
+        (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
       allow create: if signedIn() && request.auth.uid == userId;
-      allow update: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow update: if signedIn() &&
+        (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
+    }
+
+    // Presence is separated from private profile fields so chat can show
+    // online status without exposing users' email addresses or other data.
+    match /presence/{userId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update, delete: if signedIn() &&
+        request.auth.uid == userId;
     }
 
     match /materials/{materialId} {
@@ -39,9 +90,16 @@ service cloud.firestore {
         signedIn() &&
         resource.data.uploadedBy == request.auth.uid &&
         request.resource.data.uploadedBy == resource.data.uploadedBy &&
-        request.resource.data.status == resource.data.status &&
-        request.resource.data.reviewedBy == resource.data.reviewedBy &&
-        request.resource.data.reviewedAt == resource.data.reviewedAt
+        (
+          (
+            request.resource.data.status == resource.data.status &&
+            request.resource.data.reviewedBy == resource.data.reviewedBy &&
+            request.resource.data.reviewedAt == resource.data.reviewedAt &&
+            request.resource.data.get("reviewFeedback", "") ==
+              resource.data.get("reviewFeedback", "")
+          ) ||
+          isRejectedListingResubmission()
+        )
       );
 
       allow delete: if signedIn() &&
@@ -49,13 +107,120 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      // Chat access stays available to signed-in students. Material moderation
-      // above remains restricted to the administrator.
-      allow read, create, update: if signedIn();
+      // Existing deterministic chat IDs are checked by the app before use.
+      // Allowing a get of a missing chat lets chat.js check whether to create it.
+      allow get: if signedIn() && (
+        !exists(chatPath(chatId)) || chatParticipant(resource.data)
+      );
+      allow list: if chatParticipant(resource.data);
+
+      allow create: if validChatParticipants(request.resource.data) &&
+        request.resource.data.buyerId == request.auth.uid &&
+        request.resource.data.materialId is string &&
+        exists(/databases/$(database)/documents/materials/$(request.resource.data.materialId)) &&
+        get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.uploadedBy ==
+          request.resource.data.sellerId &&
+        get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.status ==
+          "approved";
+
+      allow update: if chatParticipant(resource.data) &&
+        validChatParticipants(request.resource.data) &&
+        (
+          !resource.data.keys().hasAny(["buyerId"]) ||
+          request.resource.data.buyerId == resource.data.buyerId ||
+          (
+            resource.data.get("participants", []) is list &&
+            request.resource.data.buyerId in resource.data.get("participants", [])
+          )
+        ) &&
+        (
+          !resource.data.keys().hasAny(["sellerId"]) ||
+          request.resource.data.sellerId == resource.data.sellerId ||
+          (
+            resource.data.get("participants", []) is list &&
+            request.resource.data.sellerId in resource.data.get("participants", [])
+          )
+        ) &&
+        (
+          !resource.data.keys().hasAny(["participants"]) ||
+          (
+            resource.data.participants is list &&
+            !resource.data.participants.hasAll([
+              resource.data.get("buyerId", ""),
+              resource.data.get("sellerId", "")
+            ])
+          ) ||
+          request.resource.data.participants == resource.data.participants
+        ) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "lastMessage",
+          "lastMessageSenderId",
+          "lastMessageSenderName",
+          "updatedAt",
+          "unreadCounts",
+          "hiddenFor",
+          "clearedAtBy",
+          "participants",
+          "buyerId",
+          "sellerId",
+          "buyerName",
+          "sellerName"
+        ]) &&
+        (
+          !resource.data.keys().hasAny(["buyerName"]) ||
+          request.resource.data.buyerName == resource.data.buyerName
+        ) &&
+        (
+          !resource.data.keys().hasAny(["sellerName"]) ||
+          request.resource.data.sellerName == resource.data.sellerName
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            "lastMessage",
+            "lastMessageSenderId",
+            "lastMessageSenderName"
+          ]) ||
+          request.resource.data.get("lastMessageSenderId", "") == request.auth.uid
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["unreadCounts"]) ||
+          request.resource.data.get("unreadCounts", {}).diff(
+            resource.data.get("unreadCounts", {})
+          ).affectedKeys().hasOnly([
+            request.auth.uid,
+            resource.data.buyerId == request.auth.uid
+              ? resource.data.sellerId
+              : resource.data.buyerId
+          ])
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["hiddenFor"]) ||
+          (
+            request.resource.data.get("hiddenFor", []) is list &&
+            resource.data.get("hiddenFor", []) is list &&
+            request.resource.data.get("hiddenFor", []).hasAll(
+              resource.data.get("hiddenFor", [])
+            ) &&
+            request.resource.data.get("hiddenFor", []).hasOnly(
+              resource.data.get("hiddenFor", []).concat([request.auth.uid])
+            )
+          )
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["clearedAtBy"]) ||
+          request.resource.data.get("clearedAtBy", {}).diff(
+            resource.data.get("clearedAtBy", {})
+          ).affectedKeys().hasOnly([request.auth.uid])
+        );
+
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read, create, update, delete: if signedIn();
+        allow get, list: if signedIn() && chatMemberForMessage(chatId);
+        allow create: if signedIn() &&
+          chatMemberForMessage(chatId) &&
+          request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if false;
       }
     }
   }

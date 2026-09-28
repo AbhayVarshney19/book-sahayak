@@ -3,40 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Review - Book Sahayak</title>
+    <meta name="theme-color" content="#f5f7fb">
+    <title>Admin Review · Book Sahayak</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="admin.css">
 </head>
 <body class="admin-page">
     <header class="admin-header">
-        <a class="admin-brand" href="home.html"><span>📚</span> Book Sahayak</a>
-        <nav class="admin-nav"><a href="home.html">← Back to site</a></nav>
-    </header>
-    <main class="admin-main">
-        <section class="admin-hero">
-            <div>
-                <p class="admin-eyebrow">ADMIN CONTROL CENTER</p>
-                <h1>Review new listings</h1>
-                <p class="admin-description">Check each submission before it becomes visible to students.</p>
-            </div>
-            <div class="admin-shield">✓<span>Protected review</span></div>
-        </section>
-
-        <section class="admin-summary" aria-label="Review summary">
-            <article><span>Pending review</span><strong id="pendingCount">—</strong></article>
-            <article><span>Approved listings</span><strong id="approvedCount">—</strong></article>
-            <article><span>Legacy listings</span><strong id="legacyCount">—</strong></article>
-        </section>
-
-        <section class="admin-migration" id="migrationPanel" hidden>
-            <div><strong>Finish setup</strong><p>Your existing listings need an Approved status before secure rules are enabled.</p></div>
-            <button type="button" id="approveExistingBtn">Approve existing listings</button>
-        </section>
-
-        <div class="admin-section-heading">
-            <div><h2>Awaiting your decision</h2><p id="adminMessage" class="admin-message" aria-live="polite">Loading pending listings…</p></div>
+        <a class="admin-brand" href="home.html" aria-label="Book Sahayak home">
+            <span class="admin-brand-mark" aria-hidden="true">📚</span>
+            <span class="admin-brand-copy"><strong>Book Sahayak</strong><small>ADMIN WORKSPACE</small></span>
+        </a>
+        <div class="admin-header-actions">
+            <button type="button" id="adminThemeToggle" class="admin-theme-toggle" aria-label="Toggle dark mode" aria-pressed="false">🌙 <span>Dark</span></button>
+            <a class="admin-nav" href="home.html"><span aria-hidden="true">←</span> Back to site</a>
         </div>
-        <section id="pendingMaterials" class="admin-material-grid"></section>
+    </header>
+
+    <main class="admin-main">
+        <div id="adminDashboard">
+            <section class="admin-hero" aria-labelledby="adminTitle">
+                <div class="admin-hero-copy">
+                    <p class="admin-eyebrow"><span class="admin-live-dot"></span> ADMIN CONTROL CENTER</p>
+                    <h1 id="adminTitle">Good work starts with a careful review.</h1>
+                    <p class="admin-description">Review new study resources before they reach the student community.</p>
+                    <div class="admin-hero-note"><span aria-hidden="true">✦</span> Your decisions keep the library useful and trusted.</div>
+                </div>
+                <div class="admin-hero-art" aria-hidden="true">
+                    <div class="admin-art-orbit admin-art-orbit-one"></div>
+                    <div class="admin-art-orbit admin-art-orbit-two"></div>
+                    <div class="admin-art-book">📖</div>
+                    <div class="admin-art-check">✓</div>
+                </div>
+            </section>
+
+            <section class="admin-summary" aria-label="Review overview">
+                <article class="admin-stat admin-stat-pending">
+                    <div class="admin-stat-icon" aria-hidden="true">◷</div>
+                    <div><span>Waiting for review</span><strong id="pendingCount">—</strong><small>Needs your attention</small></div>
+                </article>
+                <article class="admin-stat admin-stat-approved">
+                    <div class="admin-stat-icon" aria-hidden="true">✓</div>
+                    <div><span>Published resources</span><strong id="approvedCount">—</strong><small>Available to students</small></div>
+                </article>
+                <article class="admin-stat admin-stat-legacy">
+                    <div class="admin-stat-icon" aria-hidden="true">↗</div>
+                    <div><span>Older listings</span><strong id="legacyCount">—</strong><small>Imported before review status</small></div>
+                </article>
+            </section>
+
+            <section class="admin-migration" id="migrationPanel" hidden>
+                <div class="admin-migration-icon" aria-hidden="true">!</div>
+                <div class="admin-migration-copy">
+                    <strong>Finish the library setup</strong>
+                    <p>These older listings have no review status. Approving them makes them visible to students.</p>
+                </div>
+                <button type="button" id="approveExistingBtn">Approve older listings</button>
+            </section>
+
+            <section class="admin-review-section" aria-labelledby="reviewHeading">
+                <div class="admin-section-heading">
+                    <div>
+                        <p class="admin-section-kicker">THE REVIEW QUEUE</p>
+                        <h2 id="reviewHeading">Awaiting your decision</h2>
+                        <p id="adminMessage" class="admin-message" aria-live="polite">Loading pending listings…</p>
+                    </div>
+                    <button type="button" class="admin-refresh-btn" id="refreshListingsBtn"><span aria-hidden="true">↻</span> Refresh</button>
+                </div>
+
+                <div class="admin-toolbar">
+                    <label class="admin-search-wrap" for="listingSearch">
+                        <span aria-hidden="true">⌕</span>
+                        <input id="listingSearch" type="search" placeholder="Search title, subject, or uploader" autocomplete="off">
+                    </label>
+                    <label class="admin-category-filter" for="categoryFilter">
+                        <span>Category</span>
+                        <select id="categoryFilter"><option value="all">All categories</option></select>
+                    </label>
+                </div>
+
+                <section id="pendingMaterials" class="admin-material-grid" aria-label="Listings awaiting review"></section>
+                <div class="admin-empty-state" id="adminEmptyState" hidden>
+                    <div class="admin-empty-icon" aria-hidden="true">✦</div>
+                    <h3 id="adminEmptyTitle">You're all caught up</h3>
+                    <p id="adminEmptyDescription">There are no listings waiting for review right now.</p>
+                </div>
+            </section>
+        </div>
+
+        <section class="admin-access-denied" id="adminAccessDenied" hidden>
+            <span aria-hidden="true">🔒</span>
+            <h1>Admin access required</h1>
+            <p>This page is only available to the Book Sahayak administrator.</p>
+            <a href="home.html">Return to the site</a>
+        </section>
     </main>
+
+    <dialog class="admin-reject-dialog" id="rejectDialog" aria-labelledby="rejectDialogTitle">
+        <form id="rejectForm" class="admin-reject-form">
+            <div class="admin-dialog-mark" aria-hidden="true">✎</div>
+            <p class="admin-section-kicker">HELP THE UPLOADER IMPROVE</p>
+            <h2 id="rejectDialogTitle">Share feedback</h2>
+            <p class="admin-dialog-intro">Explain what needs to change so the uploader can update the listing and submit it again.</p>
+            <p class="admin-dialog-listing" id="rejectListingTitle"></p>
+            <label class="admin-feedback-label" for="rejectFeedbackInput">Feedback for the uploader</label>
+            <textarea id="rejectFeedbackInput" rows="5" maxlength="1200" required placeholder="For example: Add the edition and condition of the book, and upload a clearer cover photo."></textarea>
+            <p class="admin-feedback-error" id="rejectFeedbackError" aria-live="polite"></p>
+            <div class="admin-dialog-actions">
+                <button type="button" class="admin-dialog-cancel" id="cancelRejectBtn">Cancel</button>
+                <button type="submit" class="admin-dialog-confirm" id="confirmRejectBtn">Send feedback & reject</button>
+            </div>
+        </form>
+    </dialog>
+
     <script type="module" src="admin.js"></script>
 </body>
 </html>
