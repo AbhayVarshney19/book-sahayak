@@ -5,7 +5,7 @@ import {
     getDoc,
     setDoc,
     collection,
-    addDoc,
+    writeBatch,
     onSnapshot,
     serverTimestamp,
     increment
@@ -853,69 +853,38 @@ async function sendMessage(chatId) {
 
     try {
 
-        const messagesRef =
-            collection(
-                db,
-                "chats",
-                chatId,
-                "messages"
-            );
-
-
-        /* ADD MESSAGE */
-
-        await addDoc(
-            messagesRef,
-            {
-
-                text:
-                    text,
-
-                senderId:
-                    currentUser.uid,
-
-                senderName:
-                    getCurrentUserName(),
-
-                createdAt:
-                    serverTimestamp()
-
-            }
+        const messagesRef = collection(
+            db,
+            "chats",
+            chatId,
+            "messages"
         );
+        const chatRef = doc(db, "chats", chatId);
+        const messageRef = doc(messagesRef);
+        const batch = writeBatch(db);
 
+        // Commit the message and its conversation preview together. This keeps
+        // the UI from reporting a failure after the message was already saved.
+        batch.set(messageRef, {
+            text,
+            senderId: currentUser.uid,
+            senderName: getCurrentUserName(),
+            createdAt: serverTimestamp()
+        });
 
-        /* UPDATE CHAT */
-
-        await setDoc(
-            doc(
-                db,
-                "chats",
-                chatId
-            ),
-            {
-
-                lastMessage:
-                    text,
-
-                lastMessageSenderId:
-                    currentUser.uid,
-
-                lastMessageSenderName:
-                    getCurrentUserName(),
-
-                updatedAt:
-                    serverTimestamp(),
-
-                unreadCounts: {
-                    [currentUser.uid]: 0,
-                    [otherUserId]: increment(1)
-                }
-
-            },
-            {
-                merge: true
+        batch.set(chatRef, {
+            lastMessage: text,
+            lastMessageId: messageRef.id,
+            lastMessageSenderId: currentUser.uid,
+            lastMessageSenderName: getCurrentUserName(),
+            updatedAt: serverTimestamp(),
+            unreadCounts: {
+                [currentUser.uid]: 0,
+                [otherUserId]: increment(1)
             }
-        );
+        }, { merge: true });
+
+        await batch.commit();
 
 
         /* CLEAR INPUT */
@@ -1286,6 +1255,9 @@ if (clearChatBtn) {
                         clearedAtBy: {
                             [currentUser.uid]:
                                 serverTimestamp()
+                        },
+                        unreadCounts: {
+                            [currentUser.uid]: 0
                         }
 
                     },

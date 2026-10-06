@@ -627,29 +627,21 @@ function displayChats(
     ===================================================== */
 
     if (displayed === 0) {
+        const hasAnyChats = allChats.length > 0;
+        const isSearching = Boolean(chatSearch?.value.trim());
 
         if (noSearchResults) {
-
             noSearchResults.style.display =
-                "block";
+                hasAnyChats && isSearching ? "block" : "none";
         }
-
 
         if (chatsEmpty) {
-
             chatsEmpty.style.display =
-                "none";
+                hasAnyChats && isSearching ? "none" : "flex";
         }
-
-    }
-
-    else {
-
-        if (chatsEmpty) {
-
-            chatsEmpty.style.display =
-                "none";
-        }
+    } else {
+        if (noSearchResults) noSearchResults.style.display = "none";
+        if (chatsEmpty) chatsEmpty.style.display = "none";
     }
 }
 
@@ -1073,15 +1065,8 @@ async function deleteChatForMe(
                 updateChatCount();
 
 
-                if (
-                    chatsList.children.length ===
-                    0
-                ) {
-
-                    if (chatsEmpty) {
-                        chatsEmpty.style.display =
-                            "flex";
-                    }
+                if (chatsList.children.length === 0) {
+                    displayChats([]);
                 }
 
             },

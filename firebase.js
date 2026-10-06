@@ -167,6 +167,7 @@ function watchUnreadMessages(userId) {
   stopWatchingUnreadMessages?.();
 
   let receivedInitialSnapshot = false;
+  const lastSeenMessageIds = new Map();
 
   stopWatchingUnreadMessages = onSnapshot(
     query(
@@ -187,7 +188,14 @@ function watchUnreadMessages(userId) {
           chat.sellerId === userId ||
           chat.participants?.includes?.(userId);
 
-        if (isParticipant) {
+        const isHiddenForUser =
+          Array.isArray(chat.hiddenFor) && chat.hiddenFor.includes(userId);
+        const clearedAt = chat.clearedAtBy?.[userId]?.toMillis?.() || 0;
+        const lastActivityAt = chat.updatedAt?.toMillis?.() || 0;
+        const unreadMessagesWereCleared =
+          clearedAt > 0 && (!lastActivityAt || clearedAt >= lastActivityAt);
+
+        if (isParticipant && !isHiddenForUser && !unreadMessagesWereCleared) {
           total += Number(chat.unreadCounts?.[userId] || 0);
         }
       });
@@ -197,13 +205,30 @@ function watchUnreadMessages(userId) {
       if (receivedInitialSnapshot) {
         snapshot.docChanges().forEach((change) => {
           const chat = change.doc.data();
+          const previousMessageId = lastSeenMessageIds.get(change.doc.id);
+          const hasNewMessage = Boolean(chat.lastMessageId) &&
+            chat.lastMessageId !== previousMessageId;
           const hasNewIncomingMessage =
             (change.type === "added" || change.type === "modified") &&
+            hasNewMessage &&
             chat.lastMessageSenderId !== userId &&
             Boolean(chat.lastMessage);
 
           if (hasNewIncomingMessage) {
             showMessageToast(chat);
+          }
+
+          if (change.type === "removed") {
+            lastSeenMessageIds.delete(change.doc.id);
+          } else if (chat.lastMessageId) {
+            lastSeenMessageIds.set(change.doc.id, chat.lastMessageId);
+          }
+        });
+      } else {
+        snapshot.forEach((chatDocument) => {
+          const chat = chatDocument.data();
+          if (chat.lastMessageId) {
+            lastSeenMessageIds.set(chatDocument.id, chat.lastMessageId);
           }
         });
       }

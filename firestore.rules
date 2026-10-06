@@ -154,6 +154,7 @@ service cloud.firestore {
         ) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "lastMessage",
+          "lastMessageId",
           "lastMessageSenderId",
           "lastMessageSenderName",
           "updatedAt",
@@ -177,6 +178,7 @@ service cloud.firestore {
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             "lastMessage",
+            "lastMessageId",
             "lastMessageSenderId",
             "lastMessageSenderName"
           ]) ||
