@@ -323,3 +323,24 @@ body.dark-mode .admin-orphan-row { border-color: #29384f; background: #111d31; }
 body.dark-mode .admin-orphan-details strong { color: #d8e2f2; }
 body.dark-mode .admin-orphan-details span, body.dark-mode .admin-orphan-details small { color: #9eacc0; }
 @media (max-width: 520px) { .admin-orphan-row { align-items: stretch; flex-direction: column; } }
+
+
+/* Unified modern admin palette */
+:root {
+    --admin-ink: #17243b;
+    --admin-muted: #72819a;
+    --admin-line: #e2e9f3;
+    --admin-blue: #536be0;
+    --admin-blue-dark: #273d91;
+    --admin-green: #168a76;
+}
+.admin-hero {
+    background: radial-gradient(circle at 91% 12%, rgba(56, 207, 184, .26), transparent 27%),
+                linear-gradient(118deg, #172b56, #314ea7 63%, #536bd6);
+    box-shadow: 0 22px 50px rgba(38, 62, 131, .2);
+}
+.admin-stat, .admin-review-section { box-shadow: 0 12px 34px rgba(20, 39, 77, .06); }
+.admin-refresh-btn, .admin-theme-toggle, .admin-nav { border-radius: 12px; }
+.admin-approve-btn { background: linear-gradient(135deg, #11856c, #1eaa8b); }
+.admin-page button { transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
+.admin-page button:hover:not(:disabled) { transform: translateY(-1px); }
