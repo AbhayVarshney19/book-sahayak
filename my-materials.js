@@ -1,4 +1,5 @@
 import { auth, db, storage } from "./firebase.js";
+import { formatListingDateTime } from "./listing-date.js";
 
 import {
     ref,
@@ -18,8 +19,11 @@ import {
     where,
     deleteDoc,
     doc,
-    updateDoc
+    updateDoc,
+    deleteField,
+    serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
 
 
 /* =========================
@@ -39,6 +43,14 @@ const myMaterialsThemeBtn =
     document.getElementById(
         "myMaterialsThemeBtn"
     );
+
+function isPaidDigitalListing(material) {
+    return material?.condition === "Digital" && (
+        material.isFree === false ||
+        (material.isFree !== true && Number(material.price) > 0)
+    );
+}
+const downloadRequestsPanel = document.getElementById("downloadRequestsPanel");
 
 
 /* =========================
@@ -305,23 +317,46 @@ function createResubmitForm(material, materialId, user, editButton) {
             };
 
             const file = fileInput.files?.[0];
+            const paidDigital = conditionSelect.value === "Digital" && !freeInput.checked;
+            if (paidDigital && (!file || !file.name.toLowerCase().endsWith(".pdf"))) {
+                throw new Error("For a paid digital listing, choose the corrected PDF file so a fresh preview can be created.");
+            }
+            if (!paidDigital && material.storagePath?.startsWith("private-materials/") && !file) {
+                throw new Error("Choose a replacement file when changing this protected digital listing to another type.");
+            }
             if (file) {
                 const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
                 replacementRef = ref(
                     storage,
-                    `materials/${user.uid}/${Date.now()}_${safeFileName}`
+                    paidDigital
+                        ? `private-materials/${user.uid}/${materialId}/original.pdf`
+                        : `materials/${user.uid}/${Date.now()}_${safeFileName}`
                 );
                 await uploadBytes(replacementRef, file, {
                     contentType: file.type || "application/octet-stream"
                 });
-                data.fileURL = await getDownloadURL(replacementRef);
+                if (paidDigital) data.fileURL = deleteField();
+                else data.fileURL = await getDownloadURL(replacementRef);
                 data.storagePath = replacementRef.fullPath;
                 data.fileName = file.name;
+            }
+            if (paidDigital) {
+                data.accessMode = "owner-approval";
+                data.previewStatus = "processing";
+                data.previewStoragePath = "";
+            } else if (material.accessMode === "owner-approval") {
+                data.accessMode = deleteField();
+                data.previewStatus = deleteField();
+                data.previewStoragePath = deleteField();
             }
 
             await updateDoc(doc(db, "materials", materialId), data);
 
-            if (replacementRef && material.storagePath) {
+            if (paidDigital) {
+                await httpsCallable(getFunctions(), "preparePaidDigitalPreview")({ materialId });
+            }
+
+            if (replacementRef && material.storagePath && replacementRef.fullPath !== material.storagePath) {
                 try {
                     await deleteObject(ref(storage, material.storagePath));
                 } catch (cleanupError) {
@@ -332,7 +367,7 @@ function createResubmitForm(material, materialId, user, editButton) {
             alert("Your updated listing has been resubmitted for review.");
             window.location.reload();
         } catch (error) {
-            if (replacementRef) {
+            if (replacementRef && replacementRef.fullPath !== material.storagePath) {
                 try {
                     await deleteObject(replacementRef);
                 } catch (cleanupError) {
@@ -348,6 +383,55 @@ function createResubmitForm(material, materialId, user, editButton) {
     });
 
     return form;
+}
+
+async function loadDownloadRequests(user) {
+    if (!downloadRequestsPanel) return;
+    downloadRequestsPanel.innerHTML = "";
+    const requests = await getDocs(query(
+        collection(db, "downloadRequests"),
+        where("sellerUid", "==", user.uid)
+    ));
+    if (requests.empty) return;
+
+    const section = document.createElement("section");
+    section.className = "download-requests-panel";
+    const heading = document.createElement("h2");
+    heading.textContent = "Digital download requests";
+    section.append(heading);
+    requests.forEach((snapshot) => {
+        const request = snapshot.data();
+        const row = document.createElement("div");
+        row.className = "download-request-row";
+        const summary = document.createElement("p");
+        summary.textContent = `${request.buyerName || "A student"} requested “${request.materialTitle || "your resource"}” — ${request.status}.`;
+        row.append(summary);
+        if (request.status === "pending") {
+            ["approved", "rejected"].forEach((decision) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = decision === "approved" ? "Approve download" : "Decline";
+                button.addEventListener("click", async () => {
+                    button.disabled = true;
+                    try {
+                        await updateDoc(doc(db, "downloadRequests", snapshot.id), {
+                            status: decision,
+                            reviewedBy: user.uid,
+                            reviewedAt: serverTimestamp()
+                        });
+                        await loadDownloadRequests(user);
+                    } catch (error) {
+                        console.error("Could not update download request:", error);
+                        button.disabled = false;
+                        alert(`Could not update the request: ${error.message}`);
+                    }
+                });
+                row.append(button);
+            });
+        }
+        section.append(row);
+    });
+    downloadRequestsPanel.append(section);
 }
 
 
@@ -407,6 +491,8 @@ onAuthStateChanged(
 
 
         try {
+
+            await loadDownloadRequests(user);
 
             /* =========================
                GET USER MATERIALS
@@ -536,6 +622,9 @@ onAuthStateChanged(
                             )}
                         </p>
 
+                        <p class="my-material-posted">
+                            🕒 Posted ${escapeHTML(formatListingDateTime(material.createdAt))}
+                        </p>
 
                         <p class="my-material-description">
                             ${escapeHTML(
@@ -593,6 +682,14 @@ onAuthStateChanged(
                                     : ""
                             }
 
+                            ${
+                                isPaidDigitalListing(material) && material.accessMode !== "owner-approval"
+                                    ? `<button type="button" class="secureDigitalBtn">🔒 Secure file</button>`
+                                    : isPaidDigitalListing(material) && material.previewStatus !== "ready" && (material.previewStatus === "failed" || material.fileName?.toLowerCase().endsWith(".pdf"))
+                                        ? `<button type="button" class="retryPreviewBtn">↻ Prepare preview</button>`
+                                        : ""
+                            }
+
 
                             <button
                                 type="button"
@@ -628,6 +725,24 @@ onAuthStateChanged(
 
                         }
                     );
+
+                    const secureButton = materialDiv.querySelector(".secureDigitalBtn");
+                    const previewButton = materialDiv.querySelector(".retryPreviewBtn");
+                    const processDigitalFile = async (button, callableName) => {
+                        button.disabled = true;
+                        button.textContent = "Securing file…";
+                        try {
+                            await httpsCallable(getFunctions(), callableName)({ materialId });
+                            window.location.reload();
+                        } catch (error) {
+                            console.error("Could not secure digital resource:", error);
+                            button.disabled = false;
+                            button.textContent = "Could not secure file — retry";
+                            alert(error.message || "Could not secure this file.");
+                        }
+                    };
+                    secureButton?.addEventListener("click", () => processDigitalFile(secureButton, "secureLegacyPaidDigitalResource"));
+                    previewButton?.addEventListener("click", () => processDigitalFile(previewButton, "preparePaidDigitalPreview"));
 
 
                     /* =========================

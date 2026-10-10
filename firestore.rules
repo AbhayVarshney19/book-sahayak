@@ -19,6 +19,24 @@ service cloud.firestore {
         request.resource.data.get("reviewFeedback", "") == "";
     }
 
+    function validDigitalAccess(data, materialId, ownerUid) {
+      return data.get("condition", "") != "Digital" ||
+        (
+          data.get("isFree", true) == true &&
+          data.get("price", 0) == 0
+        ) || (
+          data.get("isFree", false) == false &&
+          data.get("price", 0) is number &&
+          data.price > 0 &&
+          data.get("accessMode", "") == "owner-approval" &&
+          data.get("storagePath", "") is string &&
+          data.storagePath.matches(
+            "^private-materials/" + ownerUid + "/" + materialId + "/original\\.(pdf|doc|docx|ppt|pptx)$"
+          ) &&
+          !data.keys().hasAny(["fileURL"])
+        );
+    }
+
     function chatParticipant(data) {
       return signedIn() && (
         request.auth.uid in data.get("participants", []) ||
@@ -84,12 +102,14 @@ service cloud.firestore {
 
       allow create: if signedIn() &&
         request.resource.data.uploadedBy == request.auth.uid &&
-        request.resource.data.status == "pending";
+        request.resource.data.status == "pending" &&
+        validDigitalAccess(request.resource.data, materialId, request.auth.uid);
 
       allow update: if isAdmin() || (
         signedIn() &&
         resource.data.uploadedBy == request.auth.uid &&
         request.resource.data.uploadedBy == resource.data.uploadedBy &&
+        validDigitalAccess(request.resource.data, materialId, request.auth.uid) &&
         (
           (
             request.resource.data.status == resource.data.status &&
@@ -104,6 +124,57 @@ service cloud.firestore {
 
       allow delete: if signedIn() &&
         (isAdmin() || resource.data.uploadedBy == request.auth.uid);
+    }
+
+    match /downloadRequests/{requestId} {
+      allow get: if signedIn() && (
+        (
+          !exists(/databases/$(database)/documents/downloadRequests/$(requestId)) &&
+          requestId.matches("^.+_" + request.auth.uid + "$")
+        ) ||
+        resource.data.buyerUid == request.auth.uid ||
+        resource.data.sellerUid == request.auth.uid
+      );
+      allow list: if signedIn() && resource.data.sellerUid == request.auth.uid;
+
+      allow create: if signedIn() &&
+        requestId == request.resource.data.materialId + "_" + request.auth.uid &&
+        request.resource.data.buyerUid == request.auth.uid &&
+        request.resource.data.sellerUid is string &&
+        request.resource.data.sellerUid != request.auth.uid &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.reviewedBy == "" &&
+        request.resource.data.reviewedAt == null &&
+        request.resource.data.createdAt == request.time &&
+        exists(/databases/$(database)/documents/materials/$(request.resource.data.materialId)) &&
+        get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.status == "approved" &&
+        get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.condition == "Digital" &&
+        get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.isFree == false &&
+        get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.uploadedBy == request.resource.data.sellerUid;
+
+      allow update: if signedIn() && (
+        (
+          resource.data.buyerUid == request.auth.uid &&
+          resource.data.status == "rejected" &&
+          request.resource.data.status == "pending" &&
+          request.resource.data.reviewedBy == "" &&
+          request.resource.data.reviewedAt == null &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status", "reviewedBy", "reviewedAt", "createdAt"
+          ]) && request.resource.data.createdAt == request.time
+        ) || (
+          resource.data.sellerUid == request.auth.uid &&
+          resource.data.status == "pending" &&
+          request.resource.data.status in ["approved", "rejected"] &&
+          request.resource.data.reviewedBy == request.auth.uid &&
+          request.resource.data.reviewedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status", "reviewedBy", "reviewedAt"
+          ])
+        )
+      );
+
+      allow delete: if false;
     }
 
     match /chats/{chatId} {

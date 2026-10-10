@@ -74,6 +74,19 @@ body.dark-mode .my-materials-page .rejected-note p { color: #f0d1d0; }
 body.dark-mode .my-materials-page .rejected-note span { color: #cca1a1; }
 body.dark-mode .my-materials-page .editResubmitBtn { border-color: #2d5948; background: #1d382f; color: #9ee0ba; }
 body.dark-mode .my-materials-page .messageMaterialBtn { border-color: #344a6a; background: #1a2b46; color: #b9cefa; }
+.download-requests-panel { display: grid; gap: 10px; margin: 0 0 20px; padding: 18px; border: 1px solid #dbe5f1; border-radius: 15px; background: #fff; }
+.download-requests-panel h2 { margin: 0 0 4px; color: #26364e; font-size: 17px; }
+.download-request-row { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 11px; border: 1px solid #e4eaf2; border-radius: 11px; background: #f9fbfe; }
+.download-request-row p { flex: 1 1 250px; margin: 0; color: #53647b; font-size: 12px; }
+.download-request-row button { padding: 9px 12px; border: 1px solid #cbd8e8; border-radius: 8px; background: #fff; color: #314663; cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; }
+.download-request-row button:first-of-type { border-color: #1f7653; background: #24845f; color: #fff; }
+.my-materials-page .secureDigitalBtn, .my-materials-page .retryPreviewBtn { flex: 1 1 100%; }
+body.dark-mode .download-requests-panel { border-color: #34445d; background: #17253a; }
+body.dark-mode .download-requests-panel h2 { color: #e4ecf8; }
+body.dark-mode .download-request-row { border-color: #34445d; background: #142239; }
+body.dark-mode .download-request-row p { color: #bfccde; }
+body.dark-mode .download-request-row button { border-color: #3a4b65; background: #1d2d45; color: #d1dced; }
+body.dark-mode .download-request-row button:first-of-type { border-color: #2d5948; background: #226448; color: #c9f4da; }
 body.dark-mode .material-resubmit-form { border-color: #34445d; background: #17253a; }
 body.dark-mode .resubmit-form-heading h4 { color: #e4ecf8; }
 body.dark-mode .resubmit-form-heading p,

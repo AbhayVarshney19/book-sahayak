@@ -7,10 +7,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-storage.js";
 
 import {
-    addDoc,
     collection,
+    doc,
+    setDoc,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
 
 import {
     onAuthStateChanged,
@@ -314,7 +316,7 @@ if (submitListingBtn) {
         }
 
 
-        if (!isFree.checked && !price.value) {
+        if (!isFree.checked && (!price.value || Number(price.value) <= 0)) {
 
             message.textContent =
                 "Please enter a price or select Free.";
@@ -323,7 +325,14 @@ if (submitListingBtn) {
 
         }
 
+        const paidDigital = condition === "Digital" && !isFree.checked;
+        if (paidDigital && (!file || !file.name.toLowerCase().endsWith(".pdf"))) {
+            message.textContent = "Paid digital resources must be uploaded as a PDF so buyers can preview them safely.";
+            return;
+        }
 
+
+        let listingSaved = false;
         try {
 
             message.textContent =
@@ -335,6 +344,7 @@ if (submitListingBtn) {
             let fileURL = "";
             let storagePath = "";
             let fileName = "";
+            const materialRef = doc(collection(db, "materials"));
 
 
             /* FILE UPLOAD */
@@ -351,12 +361,9 @@ if (submitListingBtn) {
                 const fileRef =
                     ref(
                         storage,
-                        "materials/" +
-                        currentUser.uid +
-                        "/" +
-                        Date.now() +
-                        "_" +
-                        safeFileName
+                        paidDigital
+                            ? `private-materials/${currentUser.uid}/${materialRef.id}/original.pdf`
+                            : "materials/" + currentUser.uid + "/" + Date.now() + "_" + safeFileName
                     );
 
 
@@ -371,8 +378,7 @@ if (submitListingBtn) {
                 );
 
 
-                fileURL =
-                    await getDownloadURL(fileRef);
+                if (!paidDigital) fileURL = await getDownloadURL(fileRef);
 
                 storagePath =
                     fileRef.fullPath;
@@ -385,8 +391,8 @@ if (submitListingBtn) {
 
             /* SAVE LISTING TO FIRESTORE */
 
-            await addDoc(
-                collection(db, "materials"),
+            await setDoc(
+                materialRef,
                 {
                     title: title,
 
@@ -410,17 +416,19 @@ if (submitListingBtn) {
 
                     storagePath: storagePath,
 
-                    fileURL: fileURL,
+                    ...(paidDigital ? {} : { fileURL }),
+
+                    ...(paidDigital ? {
+                        accessMode: "owner-approval",
+                        previewStatus: "processing",
+                        previewStoragePath: ""
+                    } : {}),
 
                     uploadedBy: currentUser.uid,
 
                     uploaderName:
                         currentUser.displayName ||
                         "Student",
-
-                    uploaderEmail:
-                        currentUser.email ||
-                        "",
 
                     status: "pending",
 
@@ -432,6 +440,13 @@ if (submitListingBtn) {
                         serverTimestamp()
                 }
             );
+            listingSaved = true;
+
+            if (paidDigital) {
+                message.textContent = "Listing saved. Preparing its watermarked preview…";
+                const preparePreview = httpsCallable(getFunctions(), "preparePaidDigitalPreview");
+                await preparePreview({ materialId: materialRef.id });
+            }
 
 
             message.textContent =
@@ -450,9 +465,9 @@ if (submitListingBtn) {
 
             console.log("Publish error:", error);
 
-            message.textContent =
-                "Publish failed: " +
-                error.message;
+            message.textContent = listingSaved
+                ? "Your listing was saved, but its preview could not be prepared. Open My Materials and choose Prepare preview to retry."
+                : "Publish failed: " + error.message;
 
             submitListingBtn.disabled = false;
 

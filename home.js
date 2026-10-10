@@ -1,4 +1,5 @@
 import { auth, db, ADMIN_UID } from "./firebase.js";
+import { formatListingDateTime } from "./listing-date.js";
 
 import {
     onAuthStateChanged,
@@ -847,7 +848,12 @@ function renderMaterials(materials) {
     "</p>" +
 
 
-    "<p class=\"resource-description\">" +
+    "<p class=\"resource-posted\">" +
+        "🕒 Posted " +
+        escapeHTML(formatListingDateTime(material.createdAt)) +
+    "</p>" +
+
+        "<p class=\"resource-description\">" +
         escapeHTML(description) +
     "</p>" +
 

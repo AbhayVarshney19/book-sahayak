@@ -7,6 +7,10 @@
     <title>Admin Review · Book Sahayak</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="admin.css">
+
+    <link rel="icon" type="image/png" sizes="256x256" href="book-sahayak-icon.png">
+    <link rel="icon" href="book-sahayak-icon.ico" sizes="any">
+    <link rel="apple-touch-icon" sizes="180x180" href="book-sahayak-touch-icon.png">
 </head>
 <body class="admin-page">
     <header class="admin-header">
@@ -56,7 +60,7 @@
                 <div class="admin-migration-icon" aria-hidden="true">!</div>
                 <div class="admin-migration-copy">
                     <strong>Finish the library setup</strong>
-                    <p>These older listings have no review status. Approving them makes them visible to students.</p>
+                    <p>Older listings have no review status. Safe listings can be approved here; paid digital files must be secured and have a preview before they can be published.</p>
                 </div>
                 <button type="button" id="approveExistingBtn">Approve older listings</button>
             </section>
@@ -88,6 +92,40 @@
                     <h3 id="adminEmptyTitle">You're all caught up</h3>
                     <p id="adminEmptyDescription">There are no listings waiting for review right now.</p>
                 </div>
+            </section>
+
+            <section class="admin-review-section admin-manage-section" aria-labelledby="manageListingsHeading">
+                <div class="admin-section-heading">
+                    <div>
+                        <p class="admin-section-kicker">LIBRARY MANAGEMENT</p>
+                        <h2 id="manageListingsHeading">Manage listed resources</h2>
+                        <p class="admin-manage-intro">Remove a listing and its uploaded file, preview, and download requests.</p>
+                    </div>
+                    <label class="admin-search-wrap admin-manage-search" for="manageListingSearch">
+                        <span aria-hidden="true">⌕</span>
+                        <input id="manageListingSearch" type="search" placeholder="Find a listing to delete" autocomplete="off">
+                    </label>
+                </div>
+                <p id="manageListingsMessage" class="admin-message" aria-live="polite">Loading listings…</p>
+                <section id="manageListings" class="admin-material-grid" aria-label="All listings"></section>
+                <div class="admin-empty-state" id="manageListingsEmpty" hidden>
+                    <div class="admin-empty-icon" aria-hidden="true">⌕</div>
+                    <h3>No matching listings</h3>
+                    <p>Try a different search or refresh the review queue.</p>
+                </div>
+            </section>
+
+            <section class="admin-review-section admin-orphan-section" aria-labelledby="orphanFilesHeading">
+                <div class="admin-section-heading">
+                    <div>
+                        <p class="admin-section-kicker">STORAGE CLEANUP</p>
+                        <h2 id="orphanFilesHeading">Unlinked uploaded files</h2>
+                        <p class="admin-manage-intro">Find old uploaded files that no longer belong to any listing.</p>
+                    </div>
+                    <button type="button" class="admin-refresh-btn" id="scanOrphanFilesBtn">Scan Storage</button>
+                </div>
+                <p id="orphanFilesMessage" class="admin-message" aria-live="polite">Scan to check for files left behind after listings were deleted.</p>
+                <div id="orphanFilesList" class="admin-orphan-list"></div>
             </section>
         </div>
 

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f7f8fc">
+    <title>My Profile - Book Sahayak</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="profile.css">
+    <link rel="icon" type="image/png" sizes="256x256" href="book-sahayak-icon.png">
+    <link rel="icon" href="book-sahayak-icon.ico" sizes="any">
+    <link rel="apple-touch-icon" sizes="180x180" href="book-sahayak-touch-icon.png">
+</head>
+<body class="profile-page">
+    <header class="navbar profile-navbar">
+        <a class="logo" href="home.html" aria-label="Book Sahayak home">
+            <span class="logo-icon" aria-hidden="true">📚</span>
+            <span>Book Sahayak</span>
+        </a>
+
+        <nav aria-label="Main navigation">
+            <a href="home.html">Home</a>
+            <a href="upload.html">List Resource</a>
+            <a href="my-materials.html">My Listings</a>
+            <a href="chats.html" class="nav-chat-link">💬 Messages</a>
+            <a href="admin.html" id="adminLink" hidden>Admin Review</a>
+        </nav>
+
+        <div class="profile-nav-actions">
+            <button type="button" id="themeBtn" class="theme-btn" aria-label="Toggle color theme">🌙 Dark Mode</button>
+            <a class="profile-nav-current" href="profile.html" aria-current="page">
+                <span aria-hidden="true">👤</span>
+                <span id="navProfileName">Profile</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="profile-main">
+        <div class="profile-breadcrumb"><a href="home.html">Home</a><span aria-hidden="true">/</span><span>My Profile</span></div>
+
+        <section class="profile-hero" aria-labelledby="profileName">
+            <div class="profile-avatar" id="profileAvatar" aria-hidden="true">👤</div>
+            <div class="profile-identity">
+                <p class="profile-eyebrow">YOUR BOOK SAHAYAK ACCOUNT</p>
+                <h1 id="profileName">Loading profile…</h1>
+                <p id="profileEmail" class="profile-email">Please wait while your account loads.</p>
+            </div>
+            <span id="profileVerified" class="profile-verified" hidden>✓ Email verified</span>
+        </section>
+
+        <section class="profile-stats" aria-label="Your listing summary">
+            <article class="profile-stat-card">
+                <span class="profile-stat-icon">📚</span>
+                <div><p>Total listings</p><strong id="totalListings">—</strong></div>
+            </article>
+            <article class="profile-stat-card">
+                <span class="profile-stat-icon profile-stat-approved">✓</span>
+                <div><p>Approved</p><strong id="approvedListings">—</strong></div>
+            </article>
+            <article class="profile-stat-card">
+                <span class="profile-stat-icon profile-stat-pending">◷</span>
+                <div><p>Under review</p><strong id="pendingListings">—</strong></div>
+            </article>
+        </section>
+
+        <div class="profile-content-grid">
+            <section class="profile-panel" aria-labelledby="accountDetailsHeading">
+                <div class="profile-panel-heading">
+                    <div><p class="profile-eyebrow">ACCOUNT</p><h2 id="accountDetailsHeading">Account details</h2></div>
+                    <span class="profile-panel-symbol">⚙</span>
+                </div>
+                <dl class="profile-details">
+                    <div><dt>Full name</dt><dd id="detailName">Loading…</dd></div>
+                    <div><dt>Email address</dt><dd id="detailEmail">Loading…</dd></div>
+                    <div><dt>Sign-in method</dt><dd id="detailProvider">Loading…</dd></div>
+                    <div><dt>Member since</dt><dd id="detailJoined">Loading…</dd></div>
+                </dl>
+            </section>
+
+            <section class="profile-panel profile-shortcuts" aria-labelledby="shortcutsHeading">
+                <div class="profile-panel-heading">
+                    <div><p class="profile-eyebrow">QUICK ACCESS</p><h2 id="shortcutsHeading">Your workspace</h2></div>
+                    <span class="profile-panel-symbol">↗</span>
+                </div>
+                <a class="profile-shortcut" href="my-materials.html"><span>📖</span><span><strong>Manage my listings</strong><small>Review and update your resources</small></span><b aria-hidden="true">→</b></a>
+                <a class="profile-shortcut" href="chats.html"><span>💬</span><span><strong>Messages</strong><small>Continue conversations with students</small></span><b aria-hidden="true">→</b></a>
+                <a class="profile-shortcut" href="upload.html"><span>＋</span><span><strong>List a resource</strong><small>Share books, notes, or study material</small></span><b aria-hidden="true">→</b></a>
+            </section>
+        </div>
+
+        <section class="profile-account-footer">
+            <div><strong>Need a different account?</strong><p>Signing out will return you to the Book Sahayak login page.</p></div>
+            <button type="button" id="profileLogoutBtn" class="profile-logout-btn">Sign out</button>
+        </section>
+        <p id="profileStatus" class="profile-status" aria-live="polite"></p>
+    </main>
+
+    <script type="module" src="profile.js"></script>
+</body>
+</html>

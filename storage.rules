@@ -1,0 +1,35 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function materialData(materialId) {
+      return firestore.get(/databases/(default)/documents/materials/$(materialId)).data;
+    }
+
+    // Paid digital originals never use this path. Keeping the existing public
+    // materials path readable preserves free and physical listing behavior.
+    match /materials/{ownerUid}/{fileName=**} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == ownerUid;
+    }
+
+    match /private-materials/{ownerUid}/{materialId}/{fileName} {
+      allow read, write: if signedIn() && request.auth.uid == ownerUid;
+    }
+
+    match /digital-previews/{materialId}/preview.pdf {
+      allow read: if signedIn() && (
+        materialData(materialId).uploadedBy == request.auth.uid ||
+        materialData(materialId).status == "approved"
+      );
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
