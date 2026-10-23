@@ -72,6 +72,9 @@ const messageSellerBtn =
 const digitalAccessPanel = document.getElementById("digitalAccessPanel");
 const materialPostedAt = document.getElementById("materialPostedAt");
 const materialFileSection = viewFileBtn?.closest(".material-file-section");
+const conditionPreviewPanel = document.getElementById("conditionPreviewPanel");
+const conditionPreviewGallery = document.getElementById("conditionPreviewGallery");
+const conditionPreviewNote = document.getElementById("conditionPreviewNote");
 
 
 /* =========================
@@ -374,7 +377,8 @@ async function loadMaterial() {
            FILE
         ========================= */
 
-        const paidDigital = material.condition === "Digital" && (
+        const materialCondition = material.condition || "Digital";
+        const paidDigital = materialCondition === "Digital" && (
             material.isFree === false ||
             (material.isFree !== true && Number(material.price) > 0)
         );
@@ -382,6 +386,10 @@ async function loadMaterial() {
             if (materialFileSection) materialFileSection.hidden = true;
             if (viewFileBtn) viewFileBtn.style.display = "none";
             await renderDigitalAccess(material, isOwner);
+        } else if (materialCondition !== "Digital") {
+            if (materialFileSection) materialFileSection.hidden = true;
+            if (viewFileBtn) viewFileBtn.style.display = "none";
+            renderConditionPreview(material);
         } else if (viewFileBtn) {
             if (materialFileSection) materialFileSection.hidden = false;
 
@@ -461,6 +469,34 @@ async function loadMaterial() {
 
 }
 
+function renderConditionPreview(material) {
+    if (!conditionPreviewPanel || !conditionPreviewGallery) return;
+    conditionPreviewPanel.hidden = false;
+    conditionPreviewGallery.replaceChildren();
+    const photos = Array.isArray(material.conditionPhotos)
+        ? material.conditionPhotos.filter((url) => typeof url === "string" && url.startsWith("https://"))
+        : [];
+    if (!photos.length) {
+        conditionPreviewNote.textContent = "The seller has not added condition photos yet. Message them to ask about the item's condition and arrange physical handover.";
+        return;
+    }
+    conditionPreviewNote.textContent = "Preview the item's condition. The physical item is handed over by the seller; no full-file download is provided.";
+    photos.slice(0, 5).forEach((url, index) => {
+        const link = document.createElement("a");
+        link.className = "condition-preview-photo";
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.setAttribute("aria-label", `Open condition photo ${index + 1} in a new tab`);
+        const image = document.createElement("img");
+        image.src = url;
+        image.alt = `Physical resource condition photo ${index + 1}`;
+        image.loading = "lazy";
+        link.append(image);
+        conditionPreviewGallery.append(link);
+    });
+}
+
 async function renderDigitalAccess(material, isOwner) {
     if (!digitalAccessPanel) return;
     digitalAccessPanel.hidden = false;
@@ -497,6 +533,7 @@ async function renderDigitalAccess(material, isOwner) {
             previewStatus.textContent = "Loading the protected preview…";
             const controller = new AbortController();
             const timeout = window.setTimeout(() => controller.abort(), 45_000);
+            let previewBytes = null;
             try {
                 const token = await currentUser.getIdToken();
                 const endpoint = new URL("https://us-central1-book-sahayak.cloudfunctions.net/getWatermarkedDigitalPreview");
@@ -506,20 +543,59 @@ async function renderDigitalAccess(material, isOwner) {
                     signal: controller.signal
                 });
                 if (!response.ok) throw new Error(await response.text());
-                const previewBlob = await response.blob();
-                if (!previewBlob.size) throw new Error("The preview file is empty.");
-                const previewUrl = URL.createObjectURL(previewBlob);
-                const frame = document.createElement("iframe");
-                frame.className = "digital-preview-frame";
-                frame.title = "Watermarked resource preview";
-                frame.src = previewUrl;
-                previewStatus.replaceWith(frame);
+                previewBytes = new Uint8Array(await response.arrayBuffer());
+                if (!previewBytes.length) throw new Error("The preview file is empty.");
+
+                // Canvas rendering works on mobile browsers that cannot display PDF blob URLs in an iframe.
+                const pdfjs = await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs");
+                pdfjs.GlobalWorkerOptions.workerSrc =
+                    "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+                const pdf = await pdfjs.getDocument({ data: previewBytes }).promise;
+                const pages = document.createElement("div");
+                pages.className = "digital-preview-pages";
+                const pageCount = Math.min(pdf.numPages, 3);
+
+                for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+                    const page = await pdf.getPage(pageNumber);
+                    const baseViewport = page.getViewport({ scale: 1 });
+                    const availableWidth = Math.max(240, digitalAccessPanel.clientWidth - 44);
+                    const viewport = page.getViewport({ scale: Math.min(1.5, availableWidth / baseViewport.width) });
+                    const outputScale = Math.min(window.devicePixelRatio || 1, 2);
+                    const pageCard = document.createElement("div");
+                    pageCard.className = "digital-preview-page";
+                    const pageLabel = document.createElement("span");
+                    pageLabel.textContent = `Preview · page ${pageNumber} of ${pageCount}`;
+                    const canvas = document.createElement("canvas");
+                    canvas.setAttribute("aria-label", `Watermarked preview page ${pageNumber}`);
+                    canvas.width = Math.ceil(viewport.width * outputScale);
+                    canvas.height = Math.ceil(viewport.height * outputScale);
+                    canvas.style.width = `${viewport.width}px`;
+                    canvas.style.height = `${viewport.height}px`;
+                    pageCard.append(pageLabel, canvas);
+                    pages.append(pageCard);
+                    await page.render({
+                        canvasContext: canvas.getContext("2d", { alpha: false }),
+                        viewport,
+                        ...(outputScale > 1 ? { transform: [outputScale, 0, 0, outputScale, 0, 0] } : {})
+                    }).promise;
+                }
+
+                previewStatus.replaceWith(pages);
                 retryButton.remove();
             } catch (error) {
                 console.warn("Could not load digital preview:", error);
                 previewStatus.textContent = error.name === "AbortError"
                     ? "Preview loading timed out. Please try again."
-                    : "Preview could not be loaded: " + (error.message || "please try again.");
+                    : "Preview could not be rendered here. Please retry or open the PDF preview in a new tab.";
+                if (previewBytes?.length) {
+                    const fallbackLink = document.createElement("a");
+                    fallbackLink.className = "digital-preview-fallback";
+                    fallbackLink.href = URL.createObjectURL(new Blob([previewBytes], { type: "application/pdf" }));
+                    fallbackLink.target = "_blank";
+                    fallbackLink.rel = "noopener noreferrer";
+                    fallbackLink.textContent = "Open preview PDF";
+                    previewStatus.after(fallbackLink);
+                }
                 retryButton.hidden = false;
                 retryButton.disabled = false;
             } finally {
@@ -582,6 +658,7 @@ async function renderDigitalAccess(material, isOwner) {
                 materialTitle: material.title || "Digital resource",
                 buyerUid: currentUser.uid,
                 buyerName: currentUser.displayName || currentUser.email || "Student",
+                buyerEmail: currentUser.email || "",
                 sellerUid: material.uploadedBy,
                 status: "pending",
                 reviewedBy: "",

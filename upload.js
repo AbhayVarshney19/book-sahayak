@@ -3,7 +3,8 @@ import { storage, db, auth } from "./firebase.js";
 import {
     ref,
     uploadBytes,
-    getDownloadURL
+    getDownloadURL,
+    deleteObject
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-storage.js";
 
 import {
@@ -74,6 +75,34 @@ const fileLabel =
 
 const fileHint =
     document.getElementById("fileHint");
+const conditionSelect = document.getElementById("condition");
+const conditionPhotosInput = document.getElementById("conditionPhotos");
+const conditionPhotosSection = document.getElementById("conditionPhotosSection");
+const conditionPhotosLabel = document.getElementById("conditionPhotosLabel");
+const resourceFileSection = fileUpload?.closest(".form-section");
+
+function updateResourceInputs() {
+    const isDigital = conditionSelect?.value === "Digital";
+    if (resourceFileSection) resourceFileSection.hidden = !isDigital;
+    if (conditionPhotosSection) conditionPhotosSection.hidden = isDigital;
+    if (fileInput) fileInput.required = isDigital && !isFree?.checked;
+    if (conditionPhotosInput) conditionPhotosInput.required = !isDigital;
+}
+
+conditionSelect?.addEventListener("change", updateResourceInputs);
+updateResourceInputs();
+conditionPhotosInput?.addEventListener("change", () => {
+    const photos = [...conditionPhotosInput.files];
+    if (photos.length > 5) {
+        conditionPhotosInput.value = "";
+        conditionPhotosLabel.textContent = "Choose up to 5 photos";
+        message.textContent = "Please select no more than 5 condition photos.";
+        return;
+    }
+    conditionPhotosLabel.textContent = photos.length
+        ? `${photos.length} condition photo${photos.length === 1 ? "" : "s"} selected`
+        : "Choose up to 5 photos";
+});
 
 
 /* FILE PICKER FEEDBACK */
@@ -197,6 +226,7 @@ if (isFree) {
             price.disabled = false;
 
         }
+        updateResourceInputs();
 
     });
 
@@ -236,6 +266,7 @@ if (submitListingBtn) {
 
         const condition =
             document.getElementById("condition").value;
+        const conditionPhotos = [...(conditionPhotosInput?.files || [])];
 
         const fileInput =
             document.getElementById("file");
@@ -326,6 +357,15 @@ if (submitListingBtn) {
         }
 
         const paidDigital = condition === "Digital" && !isFree.checked;
+        const isPhysical = condition !== "Digital";
+        if (isPhysical && !conditionPhotos.length) {
+            message.textContent = "Add at least one clear photo so buyers can check the item's condition.";
+            return;
+        }
+        if (conditionPhotos.length > 5 || conditionPhotos.some((photo) => !photo.type.startsWith("image/") || photo.size > 5 * 1024 * 1024)) {
+            message.textContent = "Choose up to 5 image files, each no larger than 5 MB.";
+            return;
+        }
         if (paidDigital && (!file || !file.name.toLowerCase().endsWith(".pdf"))) {
             message.textContent = "Paid digital resources must be uploaded as a PDF so buyers can preview them safely.";
             return;
@@ -344,12 +384,14 @@ if (submitListingBtn) {
             let fileURL = "";
             let storagePath = "";
             let fileName = "";
+            const conditionPhotoUrls = [];
+            const conditionPhotoRefs = [];
             const materialRef = doc(collection(db, "materials"));
 
 
             /* FILE UPLOAD */
 
-            if (file) {
+            if (file && !isPhysical) {
 
                 const safeFileName =
                     file.name.replace(
@@ -388,6 +430,15 @@ if (submitListingBtn) {
 
             }
 
+            if (isPhysical) {
+                for (const [index, photo] of conditionPhotos.entries()) {
+                    const safeName = photo.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                    const photoRef = ref(storage, `materials/${currentUser.uid}/${materialRef.id}/condition-preview/${index}_${safeName}`);
+                    await uploadBytes(photoRef, photo, { contentType: photo.type });
+                    conditionPhotoRefs.push(photoRef);
+                    conditionPhotoUrls.push(await getDownloadURL(photoRef));
+                }
+            }
 
             /* SAVE LISTING TO FIRESTORE */
 
@@ -416,7 +467,8 @@ if (submitListingBtn) {
 
                     storagePath: storagePath,
 
-                    ...(paidDigital ? {} : { fileURL }),
+                    ...(paidDigital || isPhysical ? {} : { fileURL }),
+                    ...(isPhysical ? { conditionPhotos: conditionPhotoUrls } : {}),
 
                     ...(paidDigital ? {
                         accessMode: "owner-approval",
@@ -464,6 +516,11 @@ if (submitListingBtn) {
         } catch (error) {
 
             console.log("Publish error:", error);
+            if (!listingSaved) {
+                for (const photoRef of conditionPhotoRefs) {
+                    try { await deleteObject(photoRef); } catch (cleanupError) { console.warn("Could not remove an incomplete condition photo:", cleanupError); }
+                }
+            }
 
             message.textContent = listingSaved
                 ? "Your listing was saved, but its preview could not be prepared. Open My Materials and choose Prepare preview to retry."

@@ -22,6 +22,7 @@
 
 
 <body class="material-page">
+    <script src="theme.js"></script>
 
 
     <!-- =========================
@@ -51,16 +52,7 @@
         </div>
 
 
-        <button
-            type="button"
-            class="material-theme-btn"
-            id="materialThemeBtn"
-            aria-label="Toggle dark mode"
-        >
-            🌙
-        </button>
-
-    </header>
+        </header>
 
 
 
@@ -237,6 +229,14 @@
 
             </div>
 
+            <section id="conditionPreviewPanel" class="condition-preview-panel" hidden aria-labelledby="conditionPreviewHeading">
+                <div class="condition-preview-heading">
+                    <div><span class="material-label">PHYSICAL ITEM</span><h2 id="conditionPreviewHeading">Condition photos</h2></div>
+                    <span class="condition-preview-badge">Preview only</span>
+                </div>
+                <p id="conditionPreviewNote" class="condition-preview-note">Check the photos, then message the seller to arrange handover.</p>
+                <div id="conditionPreviewGallery" class="condition-preview-gallery"></div>
+            </section>
             <section id="digitalAccessPanel" class="digital-access-panel" hidden aria-live="polite"></section>
 
 
@@ -256,94 +256,7 @@
 
 
     </main>
-
-
-
-    <!-- =========================
-         DARK MODE
-    ========================== -->
-
-    <script>
-
-        const materialThemeBtn =
-            document.getElementById(
-                "materialThemeBtn"
-            );
-
-
-        function applyMaterialTheme() {
-
-            const savedTheme =
-                localStorage.getItem(
-                    "bookSahayakTheme"
-                );
-
-
-            const isDark =
-                savedTheme === "dark";
-
-
-            document.body.classList.toggle(
-                "dark-mode",
-                isDark
-            );
-
-
-            if (materialThemeBtn) {
-
-                materialThemeBtn.textContent =
-                    isDark
-                        ? "☀️"
-                        : "🌙";
-
-            }
-
-        }
-
-
-        applyMaterialTheme();
-
-
-        if (materialThemeBtn) {
-
-            materialThemeBtn.addEventListener(
-                "click",
-                function () {
-
-                    const isDark =
-                        !document.body.classList.contains(
-                            "dark-mode"
-                        );
-
-
-                    document.body.classList.toggle(
-                        "dark-mode",
-                        isDark
-                    );
-
-
-                    localStorage.setItem(
-                        "bookSahayakTheme",
-                        isDark
-                            ? "dark"
-                            : "light"
-                    );
-
-
-                    materialThemeBtn.textContent =
-                        isDark
-                            ? "☀️"
-                            : "🌙";
-
-                }
-            );
-
-        }
-
-    </script>
-
-
-    <script
+<script
         type="module"
         src="material.js"
     ></script>

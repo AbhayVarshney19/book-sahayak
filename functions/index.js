@@ -1,13 +1,21 @@
-const { initializeApp } = require("firebase-admin/app");
-const { getAuth } = require("firebase-admin/auth");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const { getStorage } = require("firebase-admin/storage");
+const { onInit } = require("firebase-functions/v2/core");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 
-initializeApp({ storageBucket: "book-sahayak.firebasestorage.app" });
-const db = getFirestore();
-const bucket = getStorage().bucket();
+let adminAuth;
+let FieldValue;
+let db;
+let bucket;
+onInit(() => {
+  const { initializeApp } = require("firebase-admin/app");
+  const { getAuth } = require("firebase-admin/auth");
+  const { getFirestore, FieldValue: firestoreFieldValue } = require("firebase-admin/firestore");
+  const { getStorage } = require("firebase-admin/storage");
+  const app = initializeApp({ storageBucket: "book-sahayak.firebasestorage.app" });
+  adminAuth = getAuth(app);
+  FieldValue = firestoreFieldValue;
+  db = getFirestore(app);
+  bucket = getStorage(app).bucket();
+});
 const ADMIN_UID = "vPbcTv2GTMcvdrpVBrNiUDtjGuC3";
 
 function ownerOriginalPath(uid, materialId, path) {
@@ -23,6 +31,7 @@ function isPaidDigital(material) {
 }
 
 async function makePreviewPdf(sourceBytes) {
+  const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
   const source = await PDFDocument.load(sourceBytes, { ignoreEncryption: false });
   const pageCount = Math.min(source.getPageCount(), 3);
   if (pageCount < 1) throw new Error("The PDF has no pages.");
@@ -72,15 +81,22 @@ exports.secureLegacyPaidDigitalResource = onCall(async (request) => {
   if (typeof materialId !== "string" || !materialId) throw new HttpsError("invalid-argument", "Missing listing ID.");
   const materialRef = db.collection("materials").doc(materialId);
   const snap = await materialRef.get();
-  if (!snap.exists || snap.data().uploadedBy !== request.auth.uid) throw new HttpsError("permission-denied", "Only the listing owner can secure this file.");
+  if (!snap.exists) throw new HttpsError("not-found", "Listing not found.");
   const material = snap.data();
+  const isAdmin = request.auth.uid === ADMIN_UID;
+  if (material.uploadedBy !== request.auth.uid && !isAdmin) {
+    throw new HttpsError("permission-denied", "Only the listing owner or administrator can secure this file.");
+  }
   if (!isPaidDigital(material) || !material.storagePath || material.storagePath.startsWith("private-materials/")) {
     throw new HttpsError("failed-precondition", "This listing does not need legacy-file migration.");
+  }
+  if (!material.uploadedBy || !material.storagePath.startsWith(`materials/${material.uploadedBy}/`)) {
+    throw new HttpsError("failed-precondition", "This listing does not point to a recognized public materials file.");
   }
   const oldFile = bucket.file(material.storagePath);
   const extension = (material.fileName || material.storagePath).split(".").pop().toLowerCase();
   if (!["pdf", "doc", "docx", "ppt", "pptx"].includes(extension)) throw new HttpsError("failed-precondition", "This file type cannot be secured automatically.");
-  const privatePath = `private-materials/${request.auth.uid}/${materialId}/original.${extension}`;
+  const privatePath = `private-materials/${material.uploadedBy}/${materialId}/original.${extension}`;
   const [oldExists] = await oldFile.exists();
   const [privateExists] = await bucket.file(privatePath).exists();
   if (oldExists) {
@@ -124,7 +140,7 @@ exports.downloadApprovedDigitalResource = onRequest({ cors: true, timeoutSeconds
     const authorization = req.get("authorization") || "";
     const match = authorization.match(/^Bearer (.+)$/i);
     if (!match) return res.status(401).send("Sign in to download this resource.");
-    const decoded = await getAuth().verifyIdToken(match[1]);
+    const decoded = await adminAuth.verifyIdToken(match[1]);
     const materialId = String(req.query.materialId || "");
     const snap = await db.collection("materials").doc(materialId).get();
     if (!snap.exists) return res.status(404).send("Listing not found.");
@@ -161,7 +177,7 @@ exports.getWatermarkedDigitalPreview = onRequest({ cors: true, timeoutSeconds: 6
     const authorization = req.get("authorization") || "";
     const match = authorization.match(/^Bearer (.+)$/i);
     if (!match) return res.status(401).send("Sign in to view this preview.");
-    const decoded = await getAuth().verifyIdToken(match[1]);
+    const decoded = await adminAuth.verifyIdToken(match[1]);
     const materialId = String(req.query.materialId || "");
     const snap = await db.collection("materials").doc(materialId).get();
     if (!snap.exists) return res.status(404).send("Listing not found.");
@@ -215,6 +231,9 @@ exports.adminDeleteListing = onCall({ timeoutSeconds: 120, memory: "512MiB" }, a
   )) paths.add(storagePath);
   const previewPath = "digital-previews/" + materialId + "/preview.pdf";
   if (material.previewStoragePath === previewPath) paths.add(previewPath);
+  if (Array.isArray(material.conditionPhotos)) {
+    material.conditionPhotos.forEach((url) => addFileUrlPath(url, paths));
+  }
 
   try {
     for (const objectPath of paths) {
@@ -258,6 +277,9 @@ async function getReferencedPublicMaterialPaths() {
       referenced.add(material.storagePath);
     }
     addFileUrlPath(material.fileURL, referenced);
+    if (Array.isArray(material.conditionPhotos)) {
+      material.conditionPhotos.forEach((url) => addFileUrlPath(url, referenced));
+    }
   });
   return referenced;
 }

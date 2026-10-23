@@ -41,29 +41,9 @@ const rejectFeedbackInput = document.getElementById("rejectFeedbackInput");
 const rejectFeedbackError = document.getElementById("rejectFeedbackError");
 const confirmRejectBtn = document.getElementById("confirmRejectBtn");
 const cancelRejectBtn = document.getElementById("cancelRejectBtn");
-const adminThemeToggle = document.getElementById("adminThemeToggle");
-
 let pendingDocuments = [];
 let allListingDocuments = [];
 let rejectionTarget = null;
-
-function applyAdminTheme() {
-    const isDark = localStorage.getItem("bookSahayakTheme") === "dark";
-    document.body.classList.toggle("dark-mode", isDark);
-    adminThemeToggle.innerHTML = `${isDark ? "☀️" : "🌙"} <span>${isDark ? "Light" : "Dark"}</span>`;
-    adminThemeToggle.setAttribute("aria-pressed", String(isDark));
-}
-
-applyAdminTheme();
-adminThemeToggle?.addEventListener("click", () => {
-    const isDark = !document.body.classList.contains("dark-mode");
-    localStorage.setItem("bookSahayakTheme", isDark ? "dark" : "light");
-    applyAdminTheme();
-});
-
-window.addEventListener("storage", (event) => {
-    if (event.key === "bookSahayakTheme") applyAdminTheme();
-});
 
 function setMessage(text, state = "info") {
     if (!adminMessage) return;
@@ -363,6 +343,32 @@ function renderManageListings() {
         view.rel = "noopener noreferrer";
         view.className = "admin-manage-view";
         view.textContent = "View listing";
+        const needsFileSecurity = isPaidDigitalListing(material) &&
+            typeof material.storagePath === "string" &&
+            material.uploadedBy &&
+            material.storagePath.startsWith(`materials/${material.uploadedBy}/`);
+        let secure = null;
+        if (needsFileSecurity) {
+            secure = makeTextElement("button", "Secure paid file", "admin-listing-secure-btn");
+            secure.type = "button";
+            secure.title = "Move this older paid digital file into private storage and remove its public copy.";
+            secure.addEventListener("click", async () => {
+                if (!window.confirm("Secure the paid digital file for ‘" + (material.title || "this listing") + "’? This moves the original to private storage and removes its public copy.")) return;
+                secure.disabled = true;
+                secure.textContent = "Securing…";
+                if (manageListingsMessage) manageListingsMessage.textContent = "Moving the paid file into private storage…";
+                try {
+                    await httpsCallable(getFunctions(), "secureLegacyPaidDigitalResource")({ materialId: item.id });
+                    if (manageListingsMessage) manageListingsMessage.textContent = "The paid file is now private. The listing’s preview status has been updated.";
+                    await loadPendingMaterials();
+                } catch (error) {
+                    console.error("Could not secure paid digital file:", error);
+                    secure.disabled = false;
+                    secure.textContent = "Retry file security";
+                    if (manageListingsMessage) manageListingsMessage.textContent = "Could not secure this file: " + error.message;
+                }
+            });
+        }
         const remove = makeTextElement("button", "Delete listing", "admin-listing-delete-btn");
         remove.type = "button";
         remove.addEventListener("click", async () => {
@@ -382,7 +388,9 @@ function renderManageListings() {
                 if (manageListingsMessage) manageListingsMessage.textContent = "Could not delete listing: " + error.message;
             }
         });
-        actions.append(view, remove);
+        actions.append(view);
+        if (secure) actions.append(secure);
+        actions.append(remove);
         card.append(actions);
         manageListingsElement.append(card);
     });

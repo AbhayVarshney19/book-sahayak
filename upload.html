@@ -17,6 +17,7 @@
 
 
 <body>
+    <script src="theme.js"></script>
 
 
 <!-- ================= NAVBAR ================= -->
@@ -63,15 +64,6 @@
         <a href="my-materials.html">
             My Listings
         </a>
-
-
-        <button
-            id="themeBtn"
-            class="theme-btn"
-            type="button"
-        >
-            🌙 Dark
-        </button>
 
 
         <button
@@ -362,7 +354,7 @@
                     Resource File
                 </h2>
 
-                <p>
+                <p id="resourceFileHelp">
                     Upload the PDF or document if this is
                     a digital resource.
                 </p>
@@ -395,7 +387,16 @@
 
             </div>
 
-
+            <div class="form-section" id="conditionPhotosSection" hidden>
+                <h2>Photos of the physical item</h2>
+                <p>Show the cover, pages, and any wear so buyers can judge its condition. These photos are previews; the physical item is handed over in person.</p>
+                <label class="file-upload">
+                    <input type="file" id="conditionPhotos" accept="image/*" multiple>
+                    <span class="file-icon">📷</span>
+                    <strong id="conditionPhotosLabel">Choose up to 5 photos</strong>
+                    <small>Image files · up to 5 MB each</small>
+                </label>
+            </div>
 
             <!-- ================= PUBLISH BUTTON ================= -->
 

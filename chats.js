@@ -222,7 +222,8 @@ function getOtherUser(chat) {
 
                 name:
                     chat.buyerName ||
-                    "Buyer"
+                    "Buyer",
+                email: chat.buyerEmail || ""
             };
         }
     }
@@ -242,7 +243,8 @@ function getOtherUser(chat) {
 
                 name:
                     chat.sellerName ||
-                    "Seller"
+                    "Seller",
+                email: chat.sellerEmail || ""
             };
         }
     }
@@ -271,14 +273,9 @@ function getOtherUser(chat) {
 
                 name:
                     chat.sellerId === otherId
-                        ? (
-                            chat.sellerName ||
-                            "Seller"
-                        )
-                        : (
-                            chat.buyerName ||
-                            "Buyer"
-                        )
+                        ? (chat.sellerName || "Seller")
+                        : (chat.buyerName || "Buyer"),
+                email: chat.sellerId === otherId ? (chat.sellerEmail || "") : (chat.buyerEmail || "")
             };
         }
     }
@@ -395,10 +392,6 @@ function createChatCard(
         "Start a conversation";
 
 
-    const materialTitle =
-        chat.materialTitle ||
-        "Book Sahayak Resource";
-
 
     const chatTime =
         formatChatTime(
@@ -471,15 +464,8 @@ function createChatCard(
             </div>
 
 
-            <p class="chat-material-title">
 
-                ${escapeHTML(
-                    materialTitle
-                )}
-
-            </p>
-
-
+            ${otherUser.email ? `<p class="chat-contact-email">${escapeHTML(otherUser.email)}</p>` : ""}
             <p class="chat-last-message">
 
                 ${escapeHTML(
@@ -560,85 +546,78 @@ function createChatCard(
    DISPLAY CHAT COUNT
 ========================================================= */
 
-function updateChatCount() {
-
-    const visibleChats =
-        chatsList.children.length;
-
-
+function updateChatCount(chatCountValue, groupCount) {
     if (chatCount) {
-
-        chatCount.textContent =
-            visibleChats === 1
-                ? "1 chat"
-                : `${visibleChats} chats`;
+        chatCount.textContent = `${chatCountValue} ${chatCountValue === 1 ? "conversation" : "conversations"} · ${groupCount} ${groupCount === 1 ? "listing" : "listings"}`;
     }
 }
 
-
-/* =========================================================
-   DISPLAY CHATS
-========================================================= */
-
-function displayChats(
-    chats
-) {
-
+function displayChats(chats) {
     chatsList.innerHTML = "";
+    if (noSearchResults) noSearchResults.style.display = "none";
 
+    const selectedMaterial = new URLSearchParams(window.location.search).get("material");
+    const visibleChats = selectedMaterial
+        ? chats.filter((item) => item.data.materialId === selectedMaterial)
+        : chats;
+    const groups = new Map();
+    visibleChats.forEach((item) => {
+        const key = item.data.materialId || "legacy-unlinked";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+    });
 
-    if (noSearchResults) {
-        noSearchResults.style.display =
-            "none";
-    }
+    let groupIndex = 0;
+    groups.forEach((groupChats, materialId) => {
+        const title = groupChats.find((item) => item.data.materialTitle)?.data.materialTitle ||
+            (materialId === "legacy-unlinked" ? "Older conversations" : "Book Sahayak Resource");
+        const unread = groupChats.reduce((total, item) => total + Number(item.data.unreadCounts?.[currentUser.uid] || 0), 0);
+        const group = document.createElement("details");
+        group.className = "chat-listing-group";
+        group.open = Boolean(selectedMaterial) || Boolean(chatSearch?.value.trim()) || groupIndex === 0;
 
-
-    let displayed = 0;
-
-
-    chats.forEach(
-        function (chat) {
-
-            const card =
-                createChatCard(
-                    chat.data,
-                    chat.id
-                );
-
-
-            if (card) {
-
-                chatsList.appendChild(
-                    card
-                );
-
-                displayed++;
-            }
-
+        const summary = document.createElement("summary");
+        const copy = document.createElement("span");
+        copy.className = "chat-listing-group-copy";
+        const heading = document.createElement("strong");
+        heading.textContent = title;
+        const subtitle = document.createElement("span");
+        subtitle.textContent = `${groupChats.length} ${groupChats.length === 1 ? "conversation" : "conversations"}`;
+        copy.append(heading, subtitle);
+        summary.append(copy);
+        const badges = document.createElement("span");
+        badges.className = "chat-listing-group-badges";
+        const count = document.createElement("span");
+        count.className = "chat-listing-group-count";
+        count.textContent = String(groupChats.length);
+        badges.append(count);
+        if (unread) {
+            const unreadBadge = document.createElement("span");
+            unreadBadge.className = "chat-listing-unread";
+            unreadBadge.textContent = `${unread} unread`;
+            badges.append(unreadBadge);
         }
-    );
+        summary.append(badges);
+        group.append(summary);
 
+        const rows = document.createElement("div");
+        rows.className = "chat-listing-group-rows";
+        groupChats.forEach((item) => {
+            const card = createChatCard(item.data, item.id);
+            if (card) rows.append(card);
+        });
+        group.append(rows);
+        chatsList.append(group);
+        groupIndex++;
+    });
 
-    updateChatCount();
-
-
-    /* =====================================================
-       NO RESULTS
-    ===================================================== */
-
+    updateChatCount(visibleChats.length, groups.size);
+    const displayed = chatsList.querySelectorAll(".chat-list-card").length;
     if (displayed === 0) {
         const hasAnyChats = allChats.length > 0;
-        const isSearching = Boolean(chatSearch?.value.trim());
-
-        if (noSearchResults) {
-            noSearchResults.style.display =
-                hasAnyChats && isSearching ? "block" : "none";
-        }
-
-        if (chatsEmpty) {
-            chatsEmpty.style.display =
-                hasAnyChats && isSearching ? "none" : "flex";
-        }
+        const isSearching = Boolean(chatSearch?.value.trim() || selectedMaterial);
+        if (noSearchResults) noSearchResults.style.display = hasAnyChats && isSearching ? "block" : "none";
+        if (chatsEmpty) chatsEmpty.style.display = hasAnyChats && isSearching ? "none" : "flex";
     } else {
         if (noSearchResults) noSearchResults.style.display = "none";
         if (chatsEmpty) chatsEmpty.style.display = "none";
@@ -646,6 +625,9 @@ function displayChats(
 }
 
 
+/* =========================================================
+   LOAD CHATS
+========================================================= */
 /* =========================================================
    LOAD CHATS
 ========================================================= */
@@ -731,12 +713,6 @@ async function loadChats() {
                 const data =
                     docSnapshot.data();
 
-
-                console.log(
-                    "CHAT:",
-                    docSnapshot.id,
-                    data
-                );
 
 
                 /* =========================================
@@ -936,6 +912,8 @@ if (chatSearch) {
                             "";
 
 
+                        const email = otherUser?.email || "";
+
                         const material =
                             data.materialTitle ||
                             "";
@@ -947,6 +925,9 @@ if (chatSearch) {
 
 
                         return (
+
+                            email.toLowerCase().includes(search)
+                            ||
 
                             name
                                 .toLowerCase()

@@ -117,3 +117,40 @@ body.dark-mode .resubmit-file-block input { color: #cad5e4; }
 .my-material-card:hover { border-color: rgba(93,119,225,.42); box-shadow: 0 20px 42px rgba(33,51,91,.12); }
 body.dark-mode.my-materials-page { background: #0d1728; }
 body.dark-mode .my-material-card { border-color: #2b3a53; background: #16253c; }
+
+/* Listing conversation and contact summaries */
+.listing-activity {
+    margin: 16px 0 2px;
+    border: 1px solid #dce5f1;
+    border-radius: 13px;
+    background: #f7f9fd;
+    color: #34445c;
+}
+.listing-activity > summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 800;
+    list-style-position: inside;
+}
+.listing-activity-stats { color: #64748b; font-size: 11px; font-weight: 650; }
+.listing-contact-list { display: grid; gap: 8px; margin: 0; padding: 0 12px 12px; list-style: none; }
+.listing-contact-list li { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #e1e8f1; border-radius: 10px; background: #fff; }
+.listing-contact-list li > span { display: grid; min-width: 0; gap: 3px; }
+.listing-contact-list strong { overflow-wrap: anywhere; color: #26364e; font-size: 12px; }
+.listing-contact-email { overflow-wrap: anywhere; color: #77869b; font-size: 11px; }
+.listing-contact-list a { flex: 0 0 auto; color: #4f68df; font-size: 11px; font-weight: 800; text-decoration: none; }
+.listing-contact-list a:hover { text-decoration: underline; }
+body.dark-mode .listing-activity { border-color: #34445d; background: #142239; color: #e4ecf8; }
+body.dark-mode .listing-activity-stats { color: #9caec5; }
+body.dark-mode .listing-contact-list li { border-color: #34445d; background: #17253a; }
+body.dark-mode .listing-contact-list strong { color: #e4ecf8; }
+body.dark-mode .listing-contact-email { color: #a9b8cc; }
+@media (max-width: 560px) {
+    .listing-contact-list li { align-items: flex-start; }
+    .listing-contact-list a { padding-top: 2px; }
+}

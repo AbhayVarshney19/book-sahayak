@@ -8,7 +8,8 @@ import {
     writeBatch,
     onSnapshot,
     serverTimestamp,
-    increment
+    increment,
+    arrayRemove
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 import {
@@ -52,9 +53,6 @@ const sendBtn =
 
 const backBtn =
     document.getElementById("backBtn");
-
-const themeBtn =
-    document.getElementById("themeBtn");
 
 const chatSearchBtn =
     document.getElementById("chatSearchBtn");
@@ -374,6 +372,8 @@ async function setupChat() {
     }
 
 
+    const buyerEmail = buyerId === currentUser.uid ? (currentUser.email || "") : (existingData?.buyerEmail || "");
+
     const chatData = {
 
         participants: [
@@ -386,6 +386,8 @@ async function setupChat() {
 
         buyerName:
             buyerName,
+
+        buyerEmail,
 
         sellerId:
             sellerId,
@@ -417,9 +419,13 @@ async function setupChat() {
         if (!Array.isArray(existingData.participants) || existingData.participants.length !== 2) {
             chatUpdate.participants = chatData.participants;
         }
+        if (Array.isArray(existingData.hiddenFor) && existingData.hiddenFor.includes(currentUser.uid)) {
+            chatUpdate.hiddenFor = arrayRemove(currentUser.uid);
+        }
         if (!existingData.buyerId) chatUpdate.buyerId = buyerId;
         if (!existingData.sellerId) chatUpdate.sellerId = sellerId;
         if (!existingData.buyerName) chatUpdate.buyerName = buyerName;
+        if (!existingData.buyerEmail && buyerId === currentUser.uid && buyerEmail) chatUpdate.buyerEmail = buyerEmail;
         if (!existingData.sellerName) chatUpdate.sellerName = sellerName;
         await setDoc(chatRef, chatUpdate, { merge: true });
     } else {
@@ -547,6 +553,21 @@ async function loadMessages(chatId) {
         onSnapshot(
             messagesRef,
             function (snapshot) {
+
+                const hasIncomingMessage = snapshot.docChanges().some((change) =>
+                    change.type === "added" &&
+                    change.doc.data().senderId !== currentUser?.uid
+                );
+
+                if (hasIncomingMessage && currentUser) {
+                    setDoc(
+                        doc(db, "chats", chatId),
+                        { unreadCounts: { [currentUser.uid]: 0 } },
+                        { merge: true }
+                    ).catch((error) => {
+                        console.warn("Could not mark incoming messages as read:", error);
+                    });
+                }
 
                 messagesContainer.innerHTML = "";
 
@@ -1609,7 +1630,6 @@ console.log(
     const searchBtn = document.getElementById("chatSearchBtn");
     const moreBtn = document.getElementById("chatMoreBtn");
     const optionsBtn = document.getElementById("messageOptionsBtn");
-    const theme = document.getElementById("themeBtn");
     const input = document.getElementById("messageInput");
 
     function show(el) {
@@ -1623,13 +1643,6 @@ console.log(
         el.setAttribute("aria-hidden", "true");
     }
     function hideMenus() { hide(menu); hide(optionsMenu); }
-
-    function toggleTheme(e) {
-        e.preventDefault(); e.stopPropagation();
-        const light = document.body.classList.toggle("light-theme");
-        if (theme) theme.textContent = light ? "☀️" : "🌙";
-        try { localStorage.setItem("chatTheme", light ? "light" : "dark"); } catch (_) {}
-    }
 
     searchBtn?.addEventListener("click", e => {
         e.preventDefault(); e.stopPropagation();
@@ -1653,7 +1666,6 @@ console.log(
         if (optionsMenu?.classList.contains("active")) hide(optionsMenu); else show(optionsMenu);
     });
 
-    theme?.addEventListener("click", toggleTheme);
 
     document.getElementById("closeChatMenuBtn")?.addEventListener("click", e => {
         e.preventDefault(); e.stopPropagation(); hide(menu);
@@ -1688,11 +1700,4 @@ console.log(
         try { sendBtn.click(); } finally { setTimeout(() => { touchSending = false; }, 400); }
     }, { passive: false });
 
-    try {
-        const saved = localStorage.getItem("chatTheme");
-        if (saved === "light") {
-            document.body.classList.add("light-theme");
-            if (theme) theme.textContent = "☀️";
-        }
-    } catch (_) {}
 })();

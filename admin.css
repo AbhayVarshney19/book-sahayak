@@ -303,12 +303,16 @@ body.dark-mode .admin-dialog-cancel { border-color: #354760; background: #1b2b43
 .admin-manage-actions { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 6px; }
 .admin-manage-view, .admin-listing-delete-btn { display: inline-flex; min-height: 38px; flex: 1; align-items: center; justify-content: center; padding: 9px 12px; border: 1px solid #e0e6ef; border-radius: 10px; background: #f8faff; color: #53647d; cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; text-decoration: none; }
 .admin-listing-delete-btn { border-color: #f1d5d7; background: #fff5f5; color: #b43d45; }
+.admin-listing-secure-btn { display: inline-flex; min-height: 38px; flex: 1; align-items: center; justify-content: center; padding: 9px 12px; border: 1px solid #cde8df; border-radius: 10px; background: #effaf6; color: #18775f; cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; }
+.admin-listing-secure-btn:hover:not(:disabled) { background: #e0f5ed; }
+.admin-listing-secure-btn:disabled { cursor: wait; opacity: .6; }
 .admin-listing-delete-btn:hover:not(:disabled) { background: #fee9ea; }
 .admin-listing-delete-btn:disabled { cursor: wait; opacity: .6; }
 body.dark-mode .admin-manage-search { border-color: #29384f; background: #111d31; }
 body.dark-mode .admin-listing-status { color: #aab8cc; }
 body.dark-mode .admin-manage-view { border-color: #29384f; background: #111d31; color: #c7d3e5; }
 body.dark-mode .admin-listing-delete-btn { border-color: #71444b; background: #36232b; color: #ffafb5; }
+body.dark-mode .admin-listing-secure-btn { border-color: #2e6557; background: #1b382f; color: #a2e6cf; }
 @media (max-width: 680px) { .admin-manage-search { width: 100%; max-width: none; min-height: 40px; } .admin-manage-actions { flex-direction: column; align-items: stretch; } }
 
 
@@ -344,3 +348,28 @@ body.dark-mode .admin-orphan-details span, body.dark-mode .admin-orphan-details 
 .admin-approve-btn { background: linear-gradient(135deg, #11856c, #1eaa8b); }
 .admin-page button { transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
 .admin-page button:hover:not(:disabled) { transform: translateY(-1px); }
+
+/* Small-screen admin refinements */
+@media (max-width: 760px) {
+    .admin-header { position: sticky; top: 0; z-index: 20; flex-wrap: wrap; gap: 10px; padding: 10px 14px; }
+    .admin-brand { min-width: 0; }
+    .admin-brand-copy { min-width: 0; }
+    .admin-header-actions { margin-left: auto; }
+    .admin-hero { overflow: hidden; }
+    .admin-hero h1 { line-height: 1.08; }
+    .admin-section-heading { gap: 10px; }
+    .admin-section-heading > div { min-width: 0; }
+    .admin-material-card, .admin-card { min-width: 0; overflow-wrap: anywhere; }
+    .admin-card-actions, .admin-manage-actions { gap: 8px; }
+    .admin-card-actions button, .admin-manage-actions button, .admin-manage-actions a { min-height: 42px; }
+}
+@media (max-width: 430px) {
+    .admin-header { padding-inline: 11px; }
+    .admin-header-actions { gap: 5px; }
+    .admin-main { width: calc(100% - 20px); }
+    .admin-hero { min-height: 210px; padding: 23px 19px; }
+    .admin-review-section { padding: 14px 10px; }
+    .admin-toolbar { padding: 8px; }
+    .admin-material-card { padding: 13px !important; }
+    .admin-manage-actions { flex-direction: column; }
+}

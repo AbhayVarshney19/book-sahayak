@@ -36,6 +36,8 @@ let activeUser = null;
 let heartbeatId = null;
 let stopWatchingPresence = null;
 let stopWatchingUnreadMessages = null;
+let stopWatchingDownloadRequests = null;
+let stopWatchingBuyerDownloadRequests = null;
 let presenceRefreshId = null;
 
 async function updatePresence(isOnline) {
@@ -138,7 +140,57 @@ function showUnreadMessages(count) {
   });
 }
 
-function showMessageToast(chat) {
+let browserNotificationButton = null;
+
+function showNativeNotification(title, body, destination, tag) {
+  if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const notification = new Notification(title, {
+      body,
+      icon: "/book-sahayak-icon.png",
+      tag
+    });
+    notification.onclick = () => {
+      window.focus();
+      window.location.href = destination;
+      notification.close();
+    };
+  } catch (error) {
+    console.warn("Could not show browser notification:", error);
+  }
+}
+
+function mountBrowserNotificationControl() {
+  const accountDropdown = document.querySelector(".home-navbar .account-dropdown");
+  if (!accountDropdown || browserNotificationButton?.isConnected || !("Notification" in window)) return;
+  // Only offer setup while the browser has not made a choice. Once enabled or
+  // blocked, there is no persistent status button taking space in page headers.
+  if (Notification.permission !== "default") return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "browser-notification-control";
+  button.textContent = "🔔 Enable browser alerts";
+  button.setAttribute("aria-label", "Enable browser alerts");
+  button.title = "Get alerts while the website is open in a background tab.";
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "default") {
+        button.remove();
+        browserNotificationButton = null;
+      } else {
+        button.disabled = false;
+      }
+    } catch (error) {
+      button.disabled = false;
+      console.warn("Could not request notification permission:", error);
+    }
+  });
+  accountDropdown.append(button);
+  browserNotificationButton = button;
+}function showMessageToast(chat) {
   const senderName = chat.lastMessageSenderName || "Someone";
   const messageText = chat.lastMessage || "sent you a message";
   const existingToast = document.querySelector(".message-notification-toast");
@@ -159,10 +211,98 @@ function showMessageToast(chat) {
   });
 
   document.body.appendChild(toast);
+  showNativeNotification(`New message from ${senderName}`, messageText, "chats.html", `chat-${chat.lastMessageId || "latest"}`);
 
   window.setTimeout(() => toast.remove(), 6000);
 }
 
+function showDownloadRequestToast(request) {
+  document.querySelector(".message-notification-toast")?.remove();
+
+  const toast = document.createElement("button");
+  const title = document.createElement("strong");
+  const preview = document.createElement("span");
+  toast.type = "button";
+  toast.className = "message-notification-toast download-request-notification-toast";
+  title.textContent = "📄 Someone requested your full file";
+  preview.textContent = `${request.buyerName || "A student"} wants access to “${request.materialTitle || "your resource"}”.`;
+  toast.append(title, preview);
+  toast.addEventListener("click", () => {
+    window.location.href = "my-materials.html";
+  });
+  document.body.appendChild(toast);
+  window.setTimeout(() => toast.remove(), 8000);
+
+  showNativeNotification("New full-file request", preview.textContent, "my-materials.html", `download-request-${request.materialId || "resource"}`);
+
+}
+
+function showDownloadStatusToast(request) {
+  const status = request.status;
+  const approved = status === "approved";
+  const toast = document.createElement("button");
+  const title = document.createElement("strong");
+  const preview = document.createElement("span");
+  toast.type = "button";
+  toast.className = `message-notification-toast download-request-notification-toast${approved ? "" : " download-request-status-rejected"}`;
+  title.textContent = approved ? "✅ Your full-file request was approved" : "↩️ Your full-file request was declined";
+  preview.textContent = approved
+    ? `You can now open “${request.materialTitle || "the resource"}” and download the file.`
+    : `The owner declined access to “${request.materialTitle || "the resource"}”.`;
+  toast.append(title, preview);
+  toast.addEventListener("click", () => {
+    window.location.href = `material.html?id=${encodeURIComponent(request.materialId || "")}`;
+  });
+  document.querySelector(".message-notification-toast")?.remove();
+  document.body.appendChild(toast);
+  const destination = `material.html?id=${encodeURIComponent(request.materialId || "")}`;
+  showNativeNotification(title.textContent, preview.textContent, destination, `download-status-${request.materialId || "resource"}`);
+  window.setTimeout(() => toast.remove(), 8000);
+}
+
+function watchBuyerDownloadRequests(userId) {
+  stopWatchingBuyerDownloadRequests?.();
+  let receivedInitialSnapshot = false;
+  const lastStatuses = new Map();
+  stopWatchingBuyerDownloadRequests = onSnapshot(
+    query(collection(db, "downloadRequests"), where("buyerUid", "==", userId)),
+    (snapshot) => {
+      if (!receivedInitialSnapshot) {
+        snapshot.forEach((item) => lastStatuses.set(item.id, item.data().status));
+        receivedInitialSnapshot = true;
+        return;
+      }
+      snapshot.docChanges().forEach((change) => {
+        const request = change.doc.data();
+        const previousStatus = lastStatuses.get(change.doc.id);
+        if (change.type === "modified" && previousStatus === "pending" && ["approved", "rejected"].includes(request.status)) {
+          showDownloadStatusToast(request);
+        }
+        if (change.type === "removed") lastStatuses.delete(change.doc.id);
+        else lastStatuses.set(change.doc.id, request.status);
+      });
+    },
+    (error) => console.warn("Could not watch your full-file requests:", error)
+  );
+}
+function watchDownloadRequests(userId) {
+  stopWatchingDownloadRequests?.();
+  let receivedInitialSnapshot = false;
+  stopWatchingDownloadRequests = onSnapshot(
+    query(collection(db, "downloadRequests"), where("sellerUid", "==", userId)),
+    (snapshot) => {
+      if (receivedInitialSnapshot) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added" && change.doc.data().status === "pending") {
+            showDownloadRequestToast(change.doc.data());
+          }
+        });
+      }
+      receivedInitialSnapshot = true;
+    },
+    (error) => console.warn("Could not watch full-file requests:", error)
+  );
+}
 function watchUnreadMessages(userId) {
   stopWatchingUnreadMessages?.();
 
@@ -254,6 +394,10 @@ onAuthStateChanged(auth, (user) => {
     stopWatchingPresence = null;
     stopWatchingUnreadMessages?.();
     stopWatchingUnreadMessages = null;
+    stopWatchingDownloadRequests?.();
+    stopWatchingDownloadRequests = null;
+    stopWatchingBuyerDownloadRequests?.();
+    stopWatchingBuyerDownloadRequests = null;
     showUnreadMessages(0);
 
     if (signedOutUser) {
@@ -268,6 +412,7 @@ onAuthStateChanged(auth, (user) => {
   }
 
   activeUser = user;
+  mountBrowserNotificationControl();
 
   updatePresence(true);
   heartbeatId = setInterval(() => updatePresence(!document.hidden), PRESENCE_HEARTBEAT_MS);
@@ -282,6 +427,8 @@ onAuthStateChanged(auth, (user) => {
 
   showChatPresence(otherUserId);
   watchUnreadMessages(user.uid);
+  watchDownloadRequests(user.uid);
+  watchBuyerDownloadRequests(user.uid);
 });
 
 document.addEventListener("visibilitychange", () => updatePresence(!document.hidden));

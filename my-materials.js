@@ -21,7 +21,8 @@ import {
     doc,
     updateDoc,
     deleteField,
-    serverTimestamp
+    serverTimestamp,
+    onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
 
@@ -51,6 +52,8 @@ function isPaidDigitalListing(material) {
     );
 }
 const downloadRequestsPanel = document.getElementById("downloadRequestsPanel");
+let allDownloadRequests = [];
+let allSellerChats = [];
 
 
 /* =========================
@@ -125,6 +128,7 @@ function createResubmitForm(material, materialId, user, editButton) {
     const form = document.createElement("form");
     form.className = "material-resubmit-form";
     form.hidden = true;
+    const isLegacyPhysicalMigration = (material.status || "approved") === "approved" && material.condition && material.condition !== "Digital" && Boolean(material.fileURL);
 
     const heading = document.createElement("div");
     heading.className = "resubmit-form-heading";
@@ -132,7 +136,10 @@ function createResubmitForm(material, materialId, user, editButton) {
     const title = document.createElement("h4");
     title.textContent = "Update your listing";
     const intro = document.createElement("p");
-    intro.textContent = "Make the suggested changes, then send it back for review.";
+    intro.textContent = isLegacyPhysicalMigration
+        ? "Replace the old public attachment with condition photos. The listing stays available."
+        : "Make the suggested changes, then send it back for review.";
+    if (isLegacyPhysicalMigration) title.textContent = "Add condition photos";
     headingCopy.append(title, intro);
     const closeButton = document.createElement("button");
     closeButton.type = "button";
@@ -249,6 +256,7 @@ function createResubmitForm(material, materialId, user, editButton) {
         priceInput.disabled = freeInput.checked;
         priceInput.required = !freeInput.checked;
         if (freeInput.checked) priceInput.value = "";
+        updateEditFileFields();
     });
     priceInput.disabled = freeInput.checked;
     priceInput.required = !freeInput.checked;
@@ -264,6 +272,42 @@ function createResubmitForm(material, materialId, user, editButton) {
     fileInput.accept = ".pdf,.doc,.docx,.ppt,.pptx";
     fileBlock.append(fileInfo, fileInput);
     form.append(fileBlock);
+
+    const conditionPhotoBlock = document.createElement("div");
+    conditionPhotoBlock.className = "resubmit-file-block";
+    const conditionPhotoInfo = document.createElement("p");
+    const existingConditionPhotos = Array.isArray(material.conditionPhotos) ? material.conditionPhotos : [];
+    conditionPhotoInfo.textContent = existingConditionPhotos.length
+        ? `${existingConditionPhotos.length} condition photo(s) already saved. Choose new photos to replace them.`
+        : "Add photos showing the cover, pages, and wear on this physical item.";
+    if (isLegacyPhysicalMigration) {
+        conditionPhotoInfo.textContent = "Add condition photos. Saving removes the old public file and keeps this listing available.";
+    }
+    const conditionPhotoInput = document.createElement("input");
+    conditionPhotoInput.type = "file";
+    conditionPhotoInput.accept = "image/*";
+    conditionPhotoInput.multiple = true;
+    conditionPhotoBlock.append(conditionPhotoInfo, conditionPhotoInput);
+    form.append(conditionPhotoBlock);
+
+    const updateEditFileFields = () => {
+        const physical = conditionSelect.value !== "Digital";
+        fileBlock.hidden = physical;
+        conditionPhotoBlock.hidden = !physical;
+        fileInput.required = !physical && !isFreeInputChecked();
+        conditionPhotoInput.required = physical && existingConditionPhotos.length === 0;
+    };
+    const isFreeInputChecked = () => Boolean(form.querySelector(".resubmit-free-option input")?.checked);
+    conditionSelect.addEventListener("change", updateEditFileFields);
+    updateEditFileFields();
+    conditionPhotoInput.addEventListener("change", () => {
+        if (conditionPhotoInput.files.length > 5) {
+            conditionPhotoInput.value = "";
+            conditionPhotoInfo.textContent = "Please choose no more than 5 photos.";
+        } else if (conditionPhotoInput.files.length) {
+            conditionPhotoInfo.textContent = `${conditionPhotoInput.files.length} new condition photo(s) selected.`;
+        }
+    });
 
     const status = document.createElement("p");
     status.className = "resubmit-status";
@@ -289,6 +333,11 @@ function createResubmitForm(material, materialId, user, editButton) {
     };
     closeButton.addEventListener("click", closeForm);
     cancelButton.addEventListener("click", closeForm);
+    if (isLegacyPhysicalMigration) {
+        form.querySelectorAll("input, select, textarea").forEach((field) => { field.disabled = true; });
+        conditionPhotoInput.disabled = false;
+        submitButton.textContent = "Save photos & remove old file";
+    }
 
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -300,8 +349,14 @@ function createResubmitForm(material, materialId, user, editButton) {
         status.textContent = "Saving your changes…";
 
         let replacementRef = null;
+        let oldFileRemoved = true;
+        const uploadedConditionRefs = [];
         try {
-            const data = {
+            const data = isLegacyPhysicalMigration ? {
+                fileURL: deleteField(),
+                fileName: deleteField(),
+                storagePath: deleteField()
+            } : {
                 title: titleInput.value.trim(),
                 category: categorySelect.value,
                 subject: subjectInput.value.trim(),
@@ -317,14 +372,19 @@ function createResubmitForm(material, materialId, user, editButton) {
             };
 
             const file = fileInput.files?.[0];
+            const isPhysical = conditionSelect.value !== "Digital";
             const paidDigital = conditionSelect.value === "Digital" && !freeInput.checked;
+            const selectedConditionPhotos = [...(conditionPhotoInput.files || [])];
+            if (selectedConditionPhotos.length > 5 || selectedConditionPhotos.some((photo) => !photo.type.startsWith("image/") || photo.size > 5 * 1024 * 1024)) {
+                throw new Error("Choose up to 5 image files, each no larger than 5 MB.");
+            }
+            if (isPhysical && !selectedConditionPhotos.length && existingConditionPhotos.length === 0) {
+                throw new Error("Add at least one clear condition photo before resubmitting this physical listing.");
+            }
             if (paidDigital && (!file || !file.name.toLowerCase().endsWith(".pdf"))) {
                 throw new Error("For a paid digital listing, choose the corrected PDF file so a fresh preview can be created.");
             }
-            if (!paidDigital && material.storagePath?.startsWith("private-materials/") && !file) {
-                throw new Error("Choose a replacement file when changing this protected digital listing to another type.");
-            }
-            if (file) {
+            if (file && !isPhysical) {
                 const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
                 replacementRef = ref(
                     storage,
@@ -340,6 +400,27 @@ function createResubmitForm(material, materialId, user, editButton) {
                 data.storagePath = replacementRef.fullPath;
                 data.fileName = file.name;
             }
+            if (isPhysical && selectedConditionPhotos.length) {
+                const newPhotoUrls = [];
+                for (const [index, photo] of selectedConditionPhotos.entries()) {
+                    const safeName = photo.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                    const photoRef = ref(storage, `materials/${user.uid}/${materialId}/condition-preview/${Date.now()}_${index}_${safeName}`);
+                    await uploadBytes(photoRef, photo, { contentType: photo.type });
+                    uploadedConditionRefs.push(photoRef);
+                    newPhotoUrls.push(await getDownloadURL(photoRef));
+                }
+                data.conditionPhotos = newPhotoUrls;
+            }
+            if (isPhysical && !isLegacyPhysicalMigration) {
+                data.fileURL = deleteField();
+                data.fileName = deleteField();
+                data.storagePath = deleteField();
+                data.accessMode = deleteField();
+                data.previewStatus = deleteField();
+                data.previewStoragePath = deleteField();
+            } else if (!isPhysical) {
+                data.conditionPhotos = deleteField();
+            }
             if (paidDigital) {
                 data.accessMode = "owner-approval";
                 data.previewStatus = "processing";
@@ -352,27 +433,38 @@ function createResubmitForm(material, materialId, user, editButton) {
 
             await updateDoc(doc(db, "materials", materialId), data);
 
+            if (existingConditionPhotos.length && (selectedConditionPhotos.length || !isPhysical)) {
+                for (const oldPhotoUrl of existingConditionPhotos) {
+                    try { await deleteObject(ref(storage, oldPhotoUrl)); }
+                    catch (cleanupError) { console.warn("Could not remove a replaced condition photo:", cleanupError); }
+                }
+            }
+
             if (paidDigital) {
                 await httpsCallable(getFunctions(), "preparePaidDigitalPreview")({ materialId });
             }
 
-            if (replacementRef && material.storagePath && replacementRef.fullPath !== material.storagePath) {
+            if ((replacementRef || isPhysical || isLegacyPhysicalMigration) && material.storagePath && (!replacementRef || replacementRef.fullPath !== material.storagePath)) {
                 try {
                     await deleteObject(ref(storage, material.storagePath));
                 } catch (cleanupError) {
+                    oldFileRemoved = false;
                     console.warn("Could not remove the replaced resource file:", cleanupError);
                 }
             }
 
-            alert("Your updated listing has been resubmitted for review.");
+            alert(isLegacyPhysicalMigration
+                ? (oldFileRemoved
+                    ? "Condition photos saved and the old shared file removed."
+                    : "Condition photos saved, but Firebase could not delete the old file. Remove it from Storage or ask an admin for help.")
+                : "Your updated listing has been resubmitted for review.");
             window.location.reload();
         } catch (error) {
             if (replacementRef && replacementRef.fullPath !== material.storagePath) {
-                try {
-                    await deleteObject(replacementRef);
-                } catch (cleanupError) {
-                    console.warn("Could not remove the incomplete replacement upload:", cleanupError);
-                }
+                try { await deleteObject(replacementRef); } catch (cleanupError) { console.warn("Could not remove the incomplete replacement upload:", cleanupError); }
+            }
+            for (const uploadedPhotoRef of uploadedConditionRefs) {
+                try { await deleteObject(uploadedPhotoRef); } catch (cleanupError) { console.warn("Could not remove an incomplete condition photo:", cleanupError); }
             }
             console.error("Resubmission error:", error);
             status.textContent = `Could not resubmit: ${error.message}`;
@@ -385,26 +477,23 @@ function createResubmitForm(material, materialId, user, editButton) {
     return form;
 }
 
-async function loadDownloadRequests(user) {
+function renderDownloadRequests(user, requestDocs) {
     if (!downloadRequestsPanel) return;
-    downloadRequestsPanel.innerHTML = "";
-    const requests = await getDocs(query(
-        collection(db, "downloadRequests"),
-        where("sellerUid", "==", user.uid)
-    ));
-    if (requests.empty) return;
+    downloadRequestsPanel.replaceChildren();
+    allDownloadRequests = requestDocs.map((item) => ({ id: item.id, ...item.data() }));
+    if (!requestDocs.length) return;
 
     const section = document.createElement("section");
     section.className = "download-requests-panel";
     const heading = document.createElement("h2");
     heading.textContent = "Digital download requests";
     section.append(heading);
-    requests.forEach((snapshot) => {
+    requestDocs.forEach((snapshot) => {
         const request = snapshot.data();
         const row = document.createElement("div");
         row.className = "download-request-row";
         const summary = document.createElement("p");
-        summary.textContent = `${request.buyerName || "A student"} requested “${request.materialTitle || "your resource"}” — ${request.status}.`;
+        summary.textContent = `${request.buyerName || "A student"}${request.buyerEmail ? ` · ${request.buyerEmail}` : ""} requested “${request.materialTitle || "your resource"}” — ${request.status}.`;
         row.append(summary);
         if (request.status === "pending") {
             ["approved", "rejected"].forEach((decision) => {
@@ -419,7 +508,6 @@ async function loadDownloadRequests(user) {
                             reviewedBy: user.uid,
                             reviewedAt: serverTimestamp()
                         });
-                        await loadDownloadRequests(user);
                     } catch (error) {
                         console.error("Could not update download request:", error);
                         button.disabled = false;
@@ -434,7 +522,87 @@ async function loadDownloadRequests(user) {
     downloadRequestsPanel.append(section);
 }
 
+async function loadDownloadRequests(user) {
+    const requests = await getDocs(query(
+        collection(db, "downloadRequests"),
+        where("sellerUid", "==", user.uid)
+    ));
+    renderDownloadRequests(user, requests.docs);
+}
 
+let stopWatchingListingRequests = null;
+function watchListingRequests(user) {
+    stopWatchingListingRequests?.();
+    stopWatchingListingRequests = onSnapshot(
+        query(collection(db, "downloadRequests"), where("sellerUid", "==", user.uid)),
+        (snapshot) => {
+            renderDownloadRequests(user, snapshot.docs);
+            document.querySelectorAll(".my-material-card[data-material-id]").forEach((card) => {
+                loadListingActivity(card, card.dataset.materialId, user);
+            });
+        },
+        (error) => console.warn("Could not watch download requests:", error)
+    );
+}
+let stopWatchingSellerChats = null;
+function watchSellerChats(user) {
+    stopWatchingSellerChats?.();
+    stopWatchingSellerChats = onSnapshot(
+        query(collection(db, "chats"), where("participants", "array-contains", user.uid)),
+        (snapshot) => {
+            allSellerChats = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+            document.querySelectorAll(".my-material-card[data-material-id]").forEach((card) => {
+                loadListingActivity(card, card.dataset.materialId, user);
+            });
+        },
+        (error) => {
+            allSellerChats = [];
+            console.warn("Could not load listing conversations:", error);
+        }
+    );
+}
+async function loadListingActivity(card, materialId, user) {
+    const panel = card.querySelector(".listing-activity");
+    if (!panel) return;
+    try {
+        const conversations = allSellerChats.filter((chat) => chat.materialId === materialId && (chat.sellerId === user.uid || (chat.participants || []).includes(user.uid)) && !(chat.hiddenFor || []).includes(user.uid));
+        const unread = conversations.reduce((total, chat) => total + Number(chat.unreadCounts?.[user.uid] || 0), 0);
+        const pending = allDownloadRequests.filter((request) => request.materialId === materialId && request.status === "pending").length;
+        panel.replaceChildren();
+        const heading = document.createElement("summary");
+        heading.textContent = "Activity";
+        const stats = document.createElement("span");
+        stats.className = "listing-activity-stats";
+        stats.textContent = `${conversations.length} ${conversations.length === 1 ? "buyer conversation" : "buyer conversations"} · ${unread} unread ${unread === 1 ? "message" : "messages"}${pending ? ` · ${pending} pending file ${pending === 1 ? "request" : "requests"}` : ""}`;
+        heading.append(stats);
+        panel.append(heading);
+        const messageButton = card.querySelector(".messageMaterialBtn");
+        if (messageButton) messageButton.textContent = `💬 Messages (${conversations.length})`;
+        if (!conversations.length) return;
+        const people = document.createElement("ul");
+        people.className = "listing-contact-list";
+        conversations.sort((a, b) => String(a.buyerName || "").localeCompare(String(b.buyerName || ""))).forEach((chat) => {
+            const item = document.createElement("li");
+            const identity = document.createElement("span");
+            const name = document.createElement("strong");
+            name.textContent = chat.buyerName || "Buyer";
+            const email = document.createElement("span");
+            email.className = "listing-contact-email";
+            email.textContent = chat.buyerEmail || "Email appears when the buyer next opens this chat";
+            identity.append(name, email);
+            const link = document.createElement("a");
+            const buyerId = chat.buyerId || (chat.participants || []).find((participantId) => participantId !== user.uid) || "";
+            link.href = `chat.html?user=${encodeURIComponent(buyerId)}&material=${encodeURIComponent(materialId)}`;
+            link.textContent = "Open chat";
+            item.append(identity, link);
+            people.append(item);
+        });
+        panel.append(people);
+    } catch (error) {
+        console.warn("Could not load listing activity:", error);
+        panel.textContent = "Listing activity is temporarily unavailable.";
+    }
+}
 /* =========================
    SHOW EMPTY STATE
 ========================= */
@@ -493,6 +661,8 @@ onAuthStateChanged(
         try {
 
             await loadDownloadRequests(user);
+            watchListingRequests(user);
+            watchSellerChats(user);
 
             /* =========================
                GET USER MATERIALS
@@ -577,6 +747,7 @@ onAuthStateChanged(
 
                     materialDiv.className =
                         "my-material-card";
+                    materialDiv.dataset.materialId = materialId;
 
 
                     /* =========================
@@ -655,6 +826,8 @@ onAuthStateChanged(
                         }
 
 
+                        <details class="listing-activity"><summary>Loading listing activity…</summary></details>
+
                         <div class="my-material-actions">
 
                             <button
@@ -673,10 +846,10 @@ onAuthStateChanged(
                             </button>
 
                             ${
-                                reviewStatus === "rejected"
+                                reviewStatus === "rejected" || (material.condition && material.condition !== "Digital" && material.fileURL)
                                     ? `
                                         <button type="button" class="editResubmitBtn">
-                                            ✎ Edit & resubmit
+                                            ✎ ${reviewStatus === "rejected" ? "Edit & resubmit" : "Update photos & remove file"}
                                         </button>
                                     `
                                     : ""
@@ -745,150 +918,11 @@ onAuthStateChanged(
                     previewButton?.addEventListener("click", () => processDigitalFile(previewButton, "preparePaidDigitalPreview"));
 
 
-                    /* =========================
-                       MESSAGE BUTTON
-                    ========================= */
-
-                    const messageButton =
-                        materialDiv.querySelector(
-                            ".messageMaterialBtn"
-                        );
-
-
-                    messageButton.addEventListener(
-                        "click",
-                        async () => {
-
-                            try {
-
-                                messageButton.disabled =
-                                    true;
-
-                                messageButton.textContent =
-                                    "Loading...";
-
-
-                                /* =========================
-                                   FIND CHAT FOR THIS MATERIAL
-                                ========================= */
-
-                                const chatsQuery =
-                                    query(
-                                        collection(
-                                            db,
-                                            "chats"
-                                        ),
-                                        where(
-                                            "sellerId",
-                                            "==",
-                                            user.uid
-                                        ),
-                                        where(
-                                            "materialId",
-                                            "==",
-                                            materialId
-                                        )
-                                    );
-
-
-                                const chatsSnapshot =
-                                    await getDocs(
-                                        chatsQuery
-                                    );
-
-
-                                /* =========================
-                                   NO BUYER HAS MESSAGED YET
-                                ========================= */
-
-                                if (
-                                    chatsSnapshot.empty
-                                ) {
-
-                                    alert(
-                                        "No messages for this material yet."
-                                    );
-
-                                    messageButton.disabled =
-                                        false;
-
-                                    messageButton.textContent =
-                                        "💬 Messages";
-
-                                    return;
-
-                                }
-
-
-                                /* =========================
-                                   OPEN FIRST CONVERSATION
-                                ========================= */
-
-                                const chatDoc =
-                                    chatsSnapshot.docs[0];
-
-                                const chat =
-                                    chatDoc.data();
-
-
-                                const buyerId =
-                                    chat.buyerId;
-
-
-                                if (!buyerId) {
-
-                                    alert(
-                                        "Unable to find the buyer."
-                                    );
-
-                                    messageButton.disabled =
-                                        false;
-
-                                    messageButton.textContent =
-                                        "💬 Messages";
-
-                                    return;
-
-                                }
-
-
-                                window.location.href =
-                                    "chat.html?user=" +
-                                    encodeURIComponent(
-                                        buyerId
-                                    ) +
-                                    "&material=" +
-                                    encodeURIComponent(
-                                        materialId
-                                    );
-
-
-                            } catch (error) {
-
-                                console.error(
-                                    "Error opening messages:",
-                                    error
-                                );
-
-
-                                alert(
-                                    "Could not load messages: " +
-                                    error.message
-                                );
-
-
-                                messageButton.disabled =
-                                    false;
-
-                                messageButton.textContent =
-                                    "💬 Messages";
-
-                            }
-
-                        }
-                    );
-
-
+                    /* Open the chat group for this listing rather than choosing an arbitrary buyer. */
+                    const messageButton = materialDiv.querySelector(".messageMaterialBtn");
+                    messageButton.addEventListener("click", () => {
+                        window.location.href = `chats.html?material=${encodeURIComponent(materialId)}`;
+                    });
                     /* =========================
                        DELETE MATERIAL
                     ========================= */
@@ -1061,6 +1095,8 @@ onAuthStateChanged(
                     myMaterialsList.appendChild(
                         materialDiv
                     );
+
+                    loadListingActivity(materialDiv, materialId, user);
 
                 }
             );

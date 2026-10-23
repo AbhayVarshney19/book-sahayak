@@ -135,11 +135,15 @@ service cloud.firestore {
         resource.data.buyerUid == request.auth.uid ||
         resource.data.sellerUid == request.auth.uid
       );
-      allow list: if signedIn() && resource.data.sellerUid == request.auth.uid;
+      allow list: if signedIn() && (
+        resource.data.sellerUid == request.auth.uid ||
+        resource.data.buyerUid == request.auth.uid
+      );
 
       allow create: if signedIn() &&
         requestId == request.resource.data.materialId + "_" + request.auth.uid &&
         request.resource.data.buyerUid == request.auth.uid &&
+        request.resource.data.get("buyerEmail", "") == request.auth.token.get("email", "") &&
         request.resource.data.sellerUid is string &&
         request.resource.data.sellerUid != request.auth.uid &&
         request.resource.data.status == "pending" &&
@@ -157,10 +161,11 @@ service cloud.firestore {
           resource.data.buyerUid == request.auth.uid &&
           resource.data.status == "rejected" &&
           request.resource.data.status == "pending" &&
+          request.resource.data.get("buyerEmail", "") == request.auth.token.get("email", "") &&
           request.resource.data.reviewedBy == "" &&
           request.resource.data.reviewedAt == null &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "status", "reviewedBy", "reviewedAt", "createdAt"
+            "status", "reviewedBy", "reviewedAt", "createdAt", "buyerEmail"
           ]) && request.resource.data.createdAt == request.time
         ) || (
           resource.data.sellerUid == request.auth.uid &&
@@ -187,6 +192,7 @@ service cloud.firestore {
 
       allow create: if validChatParticipants(request.resource.data) &&
         request.resource.data.buyerId == request.auth.uid &&
+        request.resource.data.get("buyerEmail", "") == request.auth.token.get("email", "") &&
         request.resource.data.materialId is string &&
         exists(/databases/$(database)/documents/materials/$(request.resource.data.materialId)) &&
         get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.uploadedBy ==
@@ -236,7 +242,8 @@ service cloud.firestore {
           "buyerId",
           "sellerId",
           "buyerName",
-          "sellerName"
+          "sellerName",
+          "buyerEmail"
         ]) &&
         (
           !resource.data.keys().hasAny(["buyerName"]) ||
@@ -245,6 +252,10 @@ service cloud.firestore {
         (
           !resource.data.keys().hasAny(["sellerName"]) ||
           request.resource.data.sellerName == resource.data.sellerName
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["buyerEmail"]) ||
+          (request.auth.uid == request.resource.data.buyerId && request.resource.data.buyerEmail == request.auth.token.get("email", ""))
         ) &&
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -271,11 +282,22 @@ service cloud.firestore {
           (
             request.resource.data.get("hiddenFor", []) is list &&
             resource.data.get("hiddenFor", []) is list &&
-            request.resource.data.get("hiddenFor", []).hasAll(
-              resource.data.get("hiddenFor", [])
-            ) &&
-            request.resource.data.get("hiddenFor", []).hasOnly(
-              resource.data.get("hiddenFor", []).concat([request.auth.uid])
+            (
+              (
+                request.resource.data.get("hiddenFor", []).hasAll(
+                  resource.data.get("hiddenFor", [])
+                ) &&
+                request.resource.data.get("hiddenFor", []).hasOnly(
+                  resource.data.get("hiddenFor", []).concat([request.auth.uid])
+                )
+              ) || (
+                resource.data.get("hiddenFor", []).hasAll(
+                  request.resource.data.get("hiddenFor", [])
+                ) &&
+                resource.data.get("hiddenFor", []).hasOnly(
+                  request.resource.data.get("hiddenFor", []).concat([request.auth.uid])
+                )
+              )
             )
           )
         ) &&
