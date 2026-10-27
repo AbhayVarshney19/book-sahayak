@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101d31">
+    <title>Recently Viewed - Book Sahayak</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" sizes="256x256" href="book-sahayak-icon.png">
+    <link rel="icon" href="book-sahayak-icon.ico" sizes="any">
+    <link rel="apple-touch-icon" sizes="180x180" href="book-sahayak-touch-icon.png">
+</head>
+<body class="recently-viewed-page">
+    <script src="theme.js"></script>
+    <header class="my-materials-header">
+        <button type="button" class="my-materials-back" id="recentBackBtn" aria-label="Back to Home">←</button>
+        <a class="my-materials-brand recent-brand" href="home.html"><span>📚</span><strong>Book Sahayak</strong></a>
+        <a class="recent-header-link" href="home.html">Browse resources <span aria-hidden="true">→</span></a>
+    </header>
+
+    <main class="recently-viewed-main">
+        <section class="recently-viewed-intro" aria-labelledby="recentlyViewedTitle">
+            <p class="my-materials-eyebrow">YOUR SHORTLIST</p>
+            <h1 id="recentlyViewedTitle">Recently Viewed</h1>
+            <p>Listings you opened are saved here, so you can pick up where you left off.</p>
+        </section>
+
+        <section class="recently-viewed-content" aria-labelledby="recentListingsHeading">
+            <div class="recently-viewed-toolbar">
+                <div>
+                    <p class="small-heading">YOUR RECENT ACTIVITY</p>
+                    <h2 id="recentListingsHeading">Listings you checked out</h2>
+                </div>
+                <div class="recently-viewed-tools">
+                    <span id="recentListingsCount" class="my-materials-count">Loading…</span>
+                    <button id="clearRecentListings" class="recent-clear-btn" type="button" hidden>Clear history</button>
+                </div>
+            </div>
+            <p id="recentListingsStatus" class="recent-listings-status" aria-live="polite">Saved only in this browser, for your account.</p>
+            <div id="recentListingsList" aria-live="polite">
+                <p class="recent-listings-loading">Loading your recently viewed listings…</p>
+            </div>
+        </section>
+    </main>
+
+    <script type="module" src="recently-viewed.js"></script>
+</body>
+</html>

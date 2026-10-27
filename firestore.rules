@@ -6,6 +6,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isBlockedBy(userId, otherUserId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/blockedUsers/$(otherUserId));
+    }
+
+    function chatParticipantsAreUnblocked(data) {
+      return data.get("buyerId", "") == "" || data.get("sellerId", "") == "" ||
+        (!isBlockedBy(data.get("buyerId", ""), data.get("sellerId", "")) &&
+         !isBlockedBy(data.get("sellerId", ""), data.get("buyerId", "")));
+    }
+
     function isAdmin() {
       return signedIn() &&
         request.auth.uid == "vPbcTv2GTMcvdrpVBrNiUDtjGuC3";
@@ -65,7 +75,8 @@ service cloud.firestore {
 
     function chatMemberForMessage(chatId) {
       return exists(chatPath(chatId)) &&
-        chatParticipant(get(chatPath(chatId)).data);
+        chatParticipant(get(chatPath(chatId)).data) &&
+        chatParticipantsAreUnblocked(get(chatPath(chatId)).data);
     }
 
     match /users/{userId} {
@@ -76,6 +87,11 @@ service cloud.firestore {
       allow update: if signedIn() &&
         (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
+
+      match /blockedUsers/{blockedUid} {
+        allow get, list: if signedIn() && request.auth.uid == userId;
+        allow create, update, delete: if signedIn() && request.auth.uid == userId && blockedUid != userId;
+      }
     }
 
     // Presence is separated from private profile fields so chat can show
@@ -124,6 +140,36 @@ service cloud.firestore {
 
       allow delete: if signedIn() &&
         (isAdmin() || resource.data.uploadedBy == request.auth.uid);
+
+      match /listingViews/{viewerUid} {
+        allow get: if signedIn() && (request.auth.uid == viewerUid || get(/databases/$(database)/documents/materials/$(materialId)).data.uploadedBy == request.auth.uid || isAdmin());
+        allow list: if signedIn() && (get(/databases/$(database)/documents/materials/$(materialId)).data.uploadedBy == request.auth.uid || isAdmin());
+        allow create, update: if signedIn() && request.auth.uid == viewerUid && viewerUid != get(/databases/$(database)/documents/materials/$(materialId)).data.uploadedBy && get(/databases/$(database)/documents/materials/$(materialId)).data.status == "approved" && request.resource.data.keys().hasOnly(["viewerUid", "viewedAt"]) && request.resource.data.viewerUid == request.auth.uid && request.resource.data.viewedAt == request.time;
+        allow delete: if false;
+      }
+    }
+
+    match /reports/{reportId} {
+      allow create: if signedIn() &&
+        request.resource.data.reportedBy == request.auth.uid &&
+        request.resource.data.reportedOwnerUid is string &&
+        request.resource.data.reportedOwnerUid != request.auth.uid &&
+        request.resource.data.materialId is string &&
+        request.resource.data.reason in ["inaccurate", "inappropriate", "unavailable", "scam", "copyright", "other"] &&
+        request.resource.data.details is string &&
+        request.resource.data.details.size() <= 1000 &&
+        request.resource.data.status == "open" &&
+        request.resource.data.createdAt == request.time &&
+        exists(/databases/$(database)/documents/materials/$(request.resource.data.materialId)) &&
+        get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.status == "approved" &&
+        get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.uploadedBy == request.resource.data.reportedOwnerUid;
+      allow get, list: if isAdmin();
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "reviewedBy", "reviewedAt"]) &&
+        request.resource.data.status in ["open", "resolved"] &&
+        request.resource.data.reviewedBy == request.auth.uid &&
+        request.resource.data.reviewedAt == request.time;
+      allow delete: if isAdmin();
     }
 
     match /downloadRequests/{requestId} {
@@ -198,7 +244,8 @@ service cloud.firestore {
         get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.uploadedBy ==
           request.resource.data.sellerId &&
         get(/databases/$(database)/documents/materials/$(request.resource.data.materialId)).data.status ==
-          "approved";
+          "approved" &&
+        chatParticipantsAreUnblocked(request.resource.data);
 
       allow update: if chatParticipant(resource.data) &&
         validChatParticipants(request.resource.data) &&

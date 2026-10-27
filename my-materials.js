@@ -54,6 +54,7 @@ function isPaidDigitalListing(material) {
 const downloadRequestsPanel = document.getElementById("downloadRequestsPanel");
 let allDownloadRequests = [];
 let allSellerChats = [];
+const listingViewCounts = new Map();
 
 
 /* =========================
@@ -568,12 +569,17 @@ async function loadListingActivity(card, materialId, user) {
         const conversations = allSellerChats.filter((chat) => chat.materialId === materialId && (chat.sellerId === user.uid || (chat.participants || []).includes(user.uid)) && !(chat.hiddenFor || []).includes(user.uid));
         const unread = conversations.reduce((total, chat) => total + Number(chat.unreadCounts?.[user.uid] || 0), 0);
         const pending = allDownloadRequests.filter((request) => request.materialId === materialId && request.status === "pending").length;
+        if (!listingViewCounts.has(materialId)) {
+            const countPromise = getDocs(collection(db, "materials", materialId, "listingViews")).then((views) => views.size).catch((error) => { console.warn("Could not load listing views:", error); return null; });
+            listingViewCounts.set(materialId, countPromise);
+        }
+        const views = await listingViewCounts.get(materialId);
         panel.replaceChildren();
         const heading = document.createElement("summary");
         heading.textContent = "Activity";
         const stats = document.createElement("span");
         stats.className = "listing-activity-stats";
-        stats.textContent = `${conversations.length} ${conversations.length === 1 ? "buyer conversation" : "buyer conversations"} · ${unread} unread ${unread === 1 ? "message" : "messages"}${pending ? ` · ${pending} pending file ${pending === 1 ? "request" : "requests"}` : ""}`;
+        stats.textContent = `${views === null ? "Views unavailable" : `${views} unique views`} · ${conversations.length} ${conversations.length === 1 ? "buyer conversation" : "buyer conversations"} · ${unread} unread ${unread === 1 ? "message" : "messages"}${pending ? ` · ${pending} pending file ${pending === 1 ? "request" : "requests"}` : ""}`;
         heading.append(stats);
         panel.append(heading);
         const messageButton = card.querySelector(".messageMaterialBtn");

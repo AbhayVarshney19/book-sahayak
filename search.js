@@ -69,6 +69,11 @@ const backButton =
     document.getElementById(
         "backSearchBtn"
     );
+const categoryFilter = document.getElementById("filterCategory");
+const conditionFilter = document.getElementById("filterCondition");
+const priceFilter = document.getElementById("filterPrice");
+const sortFilter = document.getElementById("sortListings");
+const resetFiltersButton = document.getElementById("resetSearchFilters");
 
 
 /* =========================
@@ -76,6 +81,7 @@ const backButton =
 ========================= */
 
 let allMaterials = [];
+let resultLimit = 24;
 
 let currentUser = null;
 
@@ -271,92 +277,42 @@ if (searchInput) {
 ========================= */
 
 function performSearch() {
-
-    const searchText =
-        searchInput.value
-            .toLowerCase()
-            .trim();
-
-
-    if (!searchText) {
-
-        showEmptyState();
-
-        return;
-
-    }
-
-
-    const words =
-        searchText
-            .split(/\s+/)
-            .filter(Boolean);
-
-
-    const filtered =
-        allMaterials.filter(
-            function (material) {
-
-                const searchableText = [
-
-                    material.title,
-
-                    material.category,
-
-                    material.subject,
-
-                    material.description,
-
-                    material.uploaderName,
-
-                    material.condition,
-
-                    material.price,
-
-                    material.isFree
-                        ? "free"
-                        : ""
-
-                ]
-                    .filter(
-                        function (value) {
-
-                            return (
-                                value !== undefined &&
-                                value !== null
-                            );
-
-                        }
-                    )
-                    .join(" ")
-                    .toLowerCase();
-
-
-                return words.every(
-                    function (word) {
-
-                        return searchableText.includes(
-                            word
-                        );
-
-                    }
-                );
-
-            }
-        );
-
-
-    renderResults(
-        filtered,
-        searchText
-    );
-
+    const searchText = searchInput.value.toLowerCase().trim();
+    const hasFilters = Boolean(categoryFilter?.value || conditionFilter?.value || priceFilter?.value);
+    if (!searchText && !hasFilters) { showEmptyState(); return; }
+    const words = searchText.split(/\s+/).filter(Boolean);
+    const filtered = allMaterials.filter((material) => {
+        const searchableText = [material.title, material.category, material.subject, material.description, material.uploaderName, material.condition, material.price, material.isFree ? "free" : ""]
+            .filter((value) => value !== undefined && value !== null).join(" ").toLowerCase();
+        if (!words.every((word) => searchableText.includes(word))) return false;
+        if (categoryFilter?.value && material.category !== categoryFilter.value) return false;
+        if (conditionFilter?.value === "Digital" && material.condition !== "Digital") return false;
+        if (conditionFilter?.value === "Physical" && (!material.condition || material.condition === "Digital")) return false;
+        const free = material.isFree === true || Number(material.price) <= 0;
+        if (priceFilter?.value === "free" && !free) return false;
+        if (priceFilter?.value === "paid" && free) return false;
+        return true;
+    });
+    const priceOf = (material) => material.isFree || Number(material.price) <= 0 ? 0 : Number(material.price);
+    const dateOf = (material) => material.createdAt?.toMillis?.() || material.createdAt?.toDate?.()?.getTime() || new Date(material.createdAt || 0).getTime() || 0;
+    if (sortFilter?.value === "price-low") filtered.sort((a, b) => priceOf(a) - priceOf(b));
+    else if (sortFilter?.value === "price-high") filtered.sort((a, b) => priceOf(b) - priceOf(a));
+    else if (sortFilter?.value === "title") filtered.sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+    else filtered.sort((a, b) => dateOf(b) - dateOf(a));
+    popularSection.classList.add("search-hidden");
+    resultLimit = 24;
+    renderResults(filtered, searchText || "all listings");
 }
 
+[categoryFilter, conditionFilter, priceFilter, sortFilter].forEach((control) => control?.addEventListener("change", performSearch));
+resetFiltersButton?.addEventListener("click", () => {
+    if (categoryFilter) categoryFilter.value = "";
+    if (conditionFilter) conditionFilter.value = "";
+    if (priceFilter) priceFilter.value = "";
+    if (sortFilter) sortFilter.value = "newest";
+    performSearch();
+});
 
-/* =========================
-   RENDER RESULTS
-========================= */
 
 function renderResults(
     materials,
@@ -418,7 +374,7 @@ function renderResults(
     }
 
 
-    materials.forEach(
+    materials.slice(0, resultLimit).forEach(
         function (material) {
 
             const materialDiv =
@@ -613,6 +569,15 @@ function renderResults(
         }
     );
 
+
+    if (materials.length > resultLimit) {
+        const more = document.createElement("button");
+        more.type = "button"; more.className = "search-load-more";
+        const nextCount = Math.min(24, materials.length - resultLimit);
+        more.textContent = "Show " + nextCount + " more";
+        more.addEventListener("click", () => { resultLimit += 24; renderResults(materials, searchText); });
+        searchResults.append(more);
+    }
 }
 
 
@@ -666,7 +631,7 @@ if (clearButton) {
 
             searchInput.focus();
 
-            showEmptyState();
+            performSearch();
 
         }
     );
@@ -733,12 +698,7 @@ function saveRecentSearch(
     }
 
 
-    let recent =
-        JSON.parse(
-            localStorage.getItem(
-                "bookSahayakRecentSearches"
-            ) || "[]"
-        );
+    let recent = loadSavedRecentSearches();
 
 
     recent =
@@ -766,12 +726,11 @@ function saveRecentSearch(
         );
 
 
-    localStorage.setItem(
-        "bookSahayakRecentSearches",
-        JSON.stringify(
-            recent
-        )
-    );
+    try {
+        localStorage.setItem("bookSahayakRecentSearches", JSON.stringify(recent));
+    } catch (error) {
+        console.warn("Could not save recent searches:", error);
+    }
 
 
     loadRecentSearches();
@@ -785,12 +744,7 @@ function saveRecentSearch(
 
 function loadRecentSearches() {
 
-    const recent =
-        JSON.parse(
-            localStorage.getItem(
-                "bookSahayakRecentSearches"
-            ) || "[]"
-        );
+    const recent = loadSavedRecentSearches();
 
 
     recentSearchList.innerHTML =
@@ -869,6 +823,18 @@ function loadRecentSearches() {
 /* =========================
    BACK BUTTON
 ========================= */
+
+function loadSavedRecentSearches() {
+    try {
+        const saved = JSON.parse(localStorage.getItem("bookSahayakRecentSearches") || "[]");
+        return Array.isArray(saved)
+            ? saved.filter((item) => typeof item === "string" && item.trim()).slice(0, 5)
+            : [];
+    } catch (error) {
+        console.warn("Could not read recent searches:", error);
+        return [];
+    }
+}
 
 function goBack() {
 

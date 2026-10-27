@@ -46,7 +46,17 @@
                 <p id="profileEmail" class="profile-email">Please wait while your account loads.</p>
             </div>
             <span id="profileVerified" class="profile-verified" hidden>✓ Email verified</span>
+            <button type="button" id="editProfileNameBtn" class="profile-edit-name-btn">Edit name</button>
         </section>
+
+        <form id="editProfileNameForm" class="profile-edit-name-form" hidden>
+            <label for="profileNameInput">Display name</label>
+            <input id="profileNameInput" type="text" maxlength="60" required autocomplete="name">
+            <button type="submit">Save name</button>
+            <button type="button" id="cancelProfileNameEdit">Cancel</button>
+        </form>
+
+
 
         <section class="profile-stats" aria-label="Your listing summary">
             <article class="profile-stat-card">
@@ -84,6 +94,7 @@
                 </div>
                 <a class="profile-shortcut" href="my-materials.html"><span>📖</span><span><strong>Manage my listings</strong><small>Review and update your resources</small></span><b aria-hidden="true">→</b></a>
                 <a class="profile-shortcut" href="chats.html"><span>💬</span><span><strong>Messages</strong><small>Continue conversations with students</small></span><b aria-hidden="true">→</b></a>
+                <a class="profile-shortcut" href="recently-viewed.html"><span>↺</span><span><strong>Recently viewed</strong><small>Return to listings you opened</small></span><b aria-hidden="true">→</b></a>
                 <a class="profile-shortcut" href="upload.html"><span>＋</span><span><strong>List a resource</strong><small>Share books, notes, or study material</small></span><b aria-hidden="true">→</b></a>
             </section>
         </div>

@@ -1,10 +1,14 @@
 import { db, auth, ADMIN_UID } from "./firebase.js";
 import { formatListingDateTime } from "./listing-date.js";
+import { recordRecentListing } from "./recent-listings.js";
 
 import {
     doc,
     getDoc,
     setDoc,
+    addDoc,
+    collection,
+    deleteDoc,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
@@ -75,6 +79,12 @@ const materialFileSection = viewFileBtn?.closest(".material-file-section");
 const conditionPreviewPanel = document.getElementById("conditionPreviewPanel");
 const conditionPreviewGallery = document.getElementById("conditionPreviewGallery");
 const conditionPreviewNote = document.getElementById("conditionPreviewNote");
+const listingReportPanel = document.getElementById("listingReportPanel");
+const listingReportForm = document.getElementById("listingReportForm");
+const listingReportStatus = document.getElementById("listingReportStatus");
+const blockSellerBtn = document.getElementById("blockSellerBtn");
+const blockSellerStatus = document.getElementById("blockSellerStatus");
+let materialOwnerId = "";
 
 
 /* =========================
@@ -136,6 +146,7 @@ async function loadMaterial() {
 
         const material =
             materialDoc.data();
+        materialOwnerId = material.uploadedBy || "";
 
         const isOwner =
             currentUser &&
@@ -166,6 +177,10 @@ async function loadMaterial() {
             material
         );
 
+        if (material.status === "approved" && !isOwner && !isAdmin) {
+            recordRecentListing(currentUser.uid, materialId);
+            setDoc(doc(db, "materials", materialId, "listingViews", currentUser.uid), { viewerUid: currentUser.uid, viewedAt: serverTimestamp() }, { merge: true }).catch((error) => console.warn("Could not record listing view:", error));
+        }
 
         /* =========================
            TITLE
@@ -274,6 +289,9 @@ async function loadMaterial() {
            UPLOADER
         ========================= */
 
+        if (listingReportPanel) listingReportPanel.hidden = isOwner || isAdmin;
+        if (blockSellerBtn) blockSellerBtn.hidden = !currentUser || !materialOwnerId || isOwner || isAdmin;
+
         if (uploader) {
 
             uploader.innerHTML = "";
@@ -372,6 +390,8 @@ async function loadMaterial() {
 
         }
 
+
+        if (blockSellerBtn && !blockSellerBtn.hidden) await updateBlockButton();
 
         /* =========================
            FILE
@@ -730,6 +750,47 @@ if (backBtn) {
 /* =========================
    CHECK LOGIN
 ========================= */
+
+listingReportForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!currentUser || !materialId) return;
+    const reason = document.getElementById("listingReportReason").value;
+    const details = document.getElementById("listingReportDetails").value.trim();
+    const submit = document.getElementById("submitListingReport");
+    submit.disabled = true; listingReportStatus.textContent = "Sending report…";
+    try {
+        const listing = await getDoc(doc(db, "materials", materialId));
+        if (!listing.exists()) throw new Error("This listing is no longer available.");
+        await addDoc(collection(db, "reports"), { materialId, materialTitle: title?.textContent || "Study resource", reportedOwnerUid: listing.data().uploadedBy || "", reportedBy: currentUser.uid, reason, details, status: "open", createdAt: serverTimestamp() });
+        listingReportStatus.textContent = "Thank you. Your report has been sent for review."; listingReportForm.reset();
+        window.setTimeout(() => { if (listingReportPanel) listingReportPanel.open = false; }, 1800);
+    } catch (error) { console.error("Could not send listing report:", error); listingReportStatus.textContent = "Could not send the report. Please try again."; }
+    finally { submit.disabled = false; }
+});
+
+async function updateBlockButton() {
+    if (!currentUser || !materialOwnerId || !blockSellerBtn) return;
+    try {
+        const block = await getDoc(doc(db, "users", currentUser.uid, "blockedUsers", materialOwnerId));
+        const isBlocked = block.exists();
+        blockSellerBtn.textContent = isBlocked ? "Unblock seller" : "Block seller";
+        if (messageSellerBtn) messageSellerBtn.style.display = isBlocked ? "none" : "inline-flex";
+        if (blockSellerStatus) blockSellerStatus.textContent = isBlocked ? "Messages with this seller are blocked." : "";
+    } catch (error) { console.warn("Could not check block status:", error); }
+}
+blockSellerBtn?.addEventListener("click", async () => {
+    if (!currentUser || !materialOwnerId) return;
+    const blocked = blockSellerBtn.textContent.toLowerCase().includes("unblock");
+    if (!window.confirm(blocked ? "Unblock this seller and allow messages again?" : "Block this seller from messaging you?")) return;
+    blockSellerBtn.disabled = true;
+    try {
+        const blockRef = doc(db, "users", currentUser.uid, "blockedUsers", materialOwnerId);
+        if (blocked) await deleteDoc(blockRef);
+        else await setDoc(blockRef, { blockedUid: materialOwnerId, createdAt: serverTimestamp() });
+        await updateBlockButton();
+    } catch (error) { console.error("Could not update seller block:", error); if (blockSellerStatus) blockSellerStatus.textContent = "Could not update this block. Please try again."; }
+    finally { blockSellerBtn.disabled = false; }
+});
 
 onAuthStateChanged(
     auth,

@@ -188,6 +188,19 @@
         💬 Message Seller
     </button>
 
+
+    <button type="button" id="blockSellerBtn" class="block-seller-btn" hidden>Block seller</button>
+    <p id="blockSellerStatus" aria-live="polite"></p>
+
+    <details class="listing-report-details" id="listingReportPanel">
+        <summary>Report this listing</summary>
+        <form id="listingReportForm" class="listing-report-form">
+            <label for="listingReportReason">What is the issue?</label>
+            <select id="listingReportReason" required><option value="">Choose a reason</option><option value="inaccurate">Misleading or inaccurate details</option><option value="inappropriate">Inappropriate content</option><option value="unavailable">Seller or resource unavailable</option><option value="scam">Suspicious or fraudulent listing</option><option value="copyright">Copyright concern</option><option value="other">Other</option></select>
+            <label for="listingReportDetails">Additional details (optional)</label><textarea id="listingReportDetails" rows="3" maxlength="1000"></textarea>
+            <button type="submit" id="submitListingReport">Send report</button><p id="listingReportStatus" aria-live="polite"></p>
+        </form>
+    </details>
 </div>
 
 

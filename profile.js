@@ -1,11 +1,15 @@
 import { auth, db, ADMIN_UID } from "./firebase.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-import { collection, getDocs, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+import { collection, getDocs, doc, getDoc, query, where, setDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const themeBtn = document.getElementById("themeBtn");
 const logoutBtn = document.getElementById("profileLogoutBtn");
 const statusElement = document.getElementById("profileStatus");
 const adminLink = document.getElementById("adminLink");
+const editNameButton = document.getElementById("editProfileNameBtn");
+const editNameForm = document.getElementById("editProfileNameForm");
+const nameInput = document.getElementById("profileNameInput");
+let signedInUser = null;
 
 function applyTheme() {
     const isDark = localStorage.getItem("bookSahayakTheme") === "dark";
@@ -67,6 +71,7 @@ onAuthStateChanged(auth, async (user) => {
         return;
     }
 
+    signedInUser = user;
     if (adminLink) adminLink.hidden = user.uid !== ADMIN_UID;
 
     let name = user.displayName || "Student";
@@ -113,4 +118,34 @@ logoutBtn?.addEventListener("click", async () => {
         logoutBtn.disabled = false;
         logoutBtn.textContent = "Sign out";
     }
+});
+
+
+editNameButton?.addEventListener("click", () => {
+    if (!signedInUser || !editNameForm || !nameInput) return;
+    nameInput.value = document.getElementById("profileName").textContent.trim();
+    editNameForm.hidden = false;
+    nameInput.focus();
+});
+document.getElementById("cancelProfileNameEdit")?.addEventListener("click", () => { if (editNameForm) editNameForm.hidden = true; });
+editNameForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name || !signedInUser) return;
+    const submit = editNameForm.querySelector('[type="submit"]');
+    submit.disabled = true;
+    if (statusElement) statusElement.textContent = "Saving your name…";
+    try {
+        await updateProfile(signedInUser, { displayName: name });
+        await setDoc(doc(db, "users", signedInUser.uid), { name }, { merge: true });
+        document.getElementById("profileName").textContent = name;
+        document.getElementById("navProfileName").textContent = name;
+        document.getElementById("detailName").textContent = name;
+        document.getElementById("profileAvatar").textContent = name.charAt(0).toUpperCase();
+        if (statusElement) statusElement.textContent = "Your display name was updated.";
+        editNameForm.hidden = true;
+    } catch (error) {
+        console.error("Could not update display name:", error);
+        if (statusElement) statusElement.textContent = "Could not save your name. Please try again.";
+    } finally { submit.disabled = false; }
 });

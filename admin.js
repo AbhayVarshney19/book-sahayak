@@ -41,6 +41,8 @@ const rejectFeedbackInput = document.getElementById("rejectFeedbackInput");
 const rejectFeedbackError = document.getElementById("rejectFeedbackError");
 const confirmRejectBtn = document.getElementById("confirmRejectBtn");
 const cancelRejectBtn = document.getElementById("cancelRejectBtn");
+const listingReportsMessage = document.getElementById("listingReportsMessage");
+const listingReportsList = document.getElementById("listingReportsList");
 let pendingDocuments = [];
 let allListingDocuments = [];
 let rejectionTarget = null;
@@ -612,4 +614,37 @@ onAuthStateChanged(auth, (user) => {
     }
 
     loadPendingMaterials();
+    loadListingReports();
 });
+
+
+async function loadListingReports() {
+    if (!listingReportsList) return;
+    try {
+        const snapshot = await getDocs(collection(db, "reports"));
+        const reports = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
+            .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        listingReportsList.replaceChildren();
+        const open = reports.filter((report) => report.status === "open");
+        if (listingReportsMessage) listingReportsMessage.textContent = open.length + " open report" + (open.length === 1 ? "" : "s");
+        reports.forEach((report) => {
+            const card = document.createElement("article"); card.className = "admin-material-card";
+            const heading = makeTextElement("h3", report.materialTitle || report.materialId, "admin-material-title");
+            const reason = makeTextElement("p", "Reason: " + (report.reason || "Other"));
+            const detail = makeTextElement("p", report.details || "No extra details provided.");
+            const state = makeTextElement("p", "Status: " + (report.status || "open"));
+            const openListing = document.createElement("a"); openListing.href = "material.html?id=" + encodeURIComponent(report.materialId || ""); openListing.textContent = "Open listing"; openListing.className = "admin-file-link";
+            card.append(heading, reason, detail, state, openListing);
+            if (report.status === "open") {
+                const resolve = makeTextElement("button", "Mark resolved", "admin-dialog-confirm"); resolve.type = "button";
+                resolve.addEventListener("click", async () => { resolve.disabled = true; try { await updateDoc(doc(db, "reports", report.id), { status: "resolved", reviewedBy: auth.currentUser.uid, reviewedAt: serverTimestamp() }); await loadListingReports(); } catch (error) { console.error("Could not update report:", error); resolve.disabled = false; } });
+                card.append(resolve);
+            }
+            listingReportsList.append(card);
+        });
+        if (!reports.length && listingReportsMessage) listingReportsMessage.textContent = "No listing reports yet.";
+    } catch (error) {
+        console.error("Could not load listing reports:", error);
+        if (listingReportsMessage) listingReportsMessage.textContent = "Could not load reports. Check Firestore rules and try again.";
+    }
+}

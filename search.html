@@ -112,6 +112,23 @@
 
 
 
+        <div class="search-filter-bar" aria-label="Filter and sort listings">
+            <label>Category
+                <select id="filterCategory"><option value="">All categories</option><option>Books</option><option>Notes</option><option>PYQs</option><option>Lab Files</option><option>Other</option></select>
+            </label>
+            <label>Format
+                <select id="filterCondition"><option value="">All formats</option><option value="Digital">Digital</option><option value="Physical">Physical</option></select>
+            </label>
+            <label>Price
+                <select id="filterPrice"><option value="">Any price</option><option value="free">Free</option><option value="paid">Paid</option></select>
+            </label>
+            <label>Sort by
+                <select id="sortListings"><option value="newest">Newest</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="title">Title: A to Z</option></select>
+            </label>
+            <button type="button" id="resetSearchFilters">Reset filters</button>
+        </div>
+
+
         <!-- POPULAR SEARCHES -->
 
         <section
